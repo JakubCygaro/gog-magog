@@ -1,0 +1,24 @@
+[env]
+ADRESS = "127.0.0.1"
+PORT = 8081
+DATABASE_URL = "sqlite://data/users.db"
+DATABASE_NAME = "users_db"
+
+[tasks.format]
+command = "cargo"
+args = ["fmt"]
+
+[tasks.build]
+command = "cargo"
+args = ["build"]
+dependencies = ["format"]
+
+[tasks.run]
+command = "cargo"
+args = ["run", "--", 
+    "--adress=${ADRESS}",
+    "--port=${PORT}",
+    "--db=${DATABASE_URL}",
+    "--db-name=${DATABASE_NAME}"
+    ]
+dependencies = ["format"]
