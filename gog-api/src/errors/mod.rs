@@ -1,8 +1,6 @@
 use actix_web::{HttpResponse, ResponseError};
 use thiserror::Error;
 
-use crate::session;
-
 #[derive(Error, Debug)]
 pub enum TokenError {
     #[error("User not found")]

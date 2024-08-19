@@ -20,7 +20,13 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(LoginData::Login)
                             .text()
                             .not_null()
-                            .primary_key(), //.unique_key(),
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(LoginData::UserId)
+                            .text()
+                            .not_null()
+                            .unique_key(),
                     )
                     .col(ColumnDef::new(LoginData::Salt).text().not_null())
                     .col(ColumnDef::new(LoginData::Hash).text().not_null())
@@ -41,4 +47,5 @@ pub enum LoginData {
     Login,
     Salt,
     Hash,
+    UserId,
 }
