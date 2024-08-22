@@ -25,7 +25,7 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(), //.unique_key(),
                     )
-                    .col(ColumnDef::new(UserData::Description).text())
+                    .col(ColumnDef::new(UserData::Description).text().default(""))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-user_id")

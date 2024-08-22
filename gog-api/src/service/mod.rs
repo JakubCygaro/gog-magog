@@ -9,7 +9,7 @@ use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
-use log::{log, Level};
+use log::{debug, error, log, Level};
 pub use objects::DbConnection;
 use objects::{UserCreationData, UserDataResponse, UserLogin};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
@@ -67,7 +67,7 @@ async fn user_create(
 
             let data = entity::user_data::ActiveModel {
                 user_id: active.user_id.clone(),
-                ..Default::default()
+                description: sea_orm::ActiveValue::Set("".to_owned())
             };
             if let Err(db_err) = LoginData::insert(active.clone()).exec(db).await {
                 log!(
@@ -175,6 +175,7 @@ async fn user_login_token(
             Err(e) => Err(TokenError::UserSessionError { source: e }),
         };
     } else {
+        session.remove("id");
         Err(TokenError::WrongPassword)
     }
 }
@@ -208,29 +209,75 @@ async fn user_data(
             .reason("no such user session")
             .finish();
     };
+    // let Ok(a) = LoginData::find()
+    //     .filter(login_data::Column::Login.eq(&usr_login))
+    //     .find_with_related(UserData)
+    //     .all(db)
+    //     .await
+    // else {
+    //     return HttpResponse::InternalServerError().finish();
+    // };
+    // let Some((login_d, user_d)) = a.first() else {
+    //     return HttpResponse::InternalServerError().finish();
+    // };
+    // let Some(user_d) = user_d.first() else {
+    //     return HttpResponse::InternalServerError().finish();
+    // };
+    // let data = UserDataResponse {
+    //     login: login_d.login.clone(),
+    //     id: uuid::Uuid::from_str(&user_d.user_id).unwrap(),
+    //     description: user_d.description.clone(),
+    // };
+
+    // return if let Ok(json) = serde_json::to_string(&data) {
+    //     HttpResponse::Ok().body(json)
+    // } else {
+    //     HttpResponse::InternalServerError().finish()
+    // };
+
     let Ok(Some(usr)) = LoginData::find()
         .filter(login_data::Column::Login.eq(&usr_login))
         .one(db)
         .await
     else {
+        log!(Level::Debug, "login data not found");
         return HttpResponse::NotFound().finish();
-    };
-    let Ok(Some(data)) = UserData::find()
-        .filter(entity::user_data::Column::UserId.eq(&usr.user_id))
-        .one(db)
-        .await
-    else {
-        return HttpResponse::NotFound().finish();
-    };
-    let data = UserDataResponse {
-        login: usr.login,
-        id: uuid::Uuid::from_str(&usr.user_id).unwrap(),
-        description: data.description,
     };
 
-    if let Ok(json) = serde_json::to_string(&data) {
-        HttpResponse::Ok().body(json)
-    } else {
-        HttpResponse::InternalServerError().finish()
+    debug!("user_id: {}", &usr.user_id);
+
+    let data = UserData::find()
+        .filter(entity::user_data::Column::UserId.eq(&usr.user_id))
+        .one(db)
+        .await;
+    // else {
+    //     log!(Level::Debug, "user data not found");
+    //     return HttpResponse::NotFound().finish();
+    // };
+
+    match data {
+        Ok(Some(data)) => {
+            let data = UserDataResponse {
+                login: usr.login,
+                id: uuid::Uuid::from_str(&usr.user_id).unwrap(),
+                description: data.description,
+            };
+
+            if let Ok(json) = serde_json::to_string(&data) {
+                HttpResponse::Ok().body(json)
+            } else {
+                HttpResponse::InternalServerError().finish()
+            }
+        }
+        Ok(None) => {
+            debug!("user data not found despite login found");
+            HttpResponse::NotFound().finish()
+        }
+        Err(e) => {
+            error!("{:?}", e);
+            HttpResponse::InternalServerError()
+                .reason("an error occured")
+                .finish()
+        }
     }
 }

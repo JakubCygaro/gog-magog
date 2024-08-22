@@ -22,3 +22,21 @@ args = ["run", "--",
     "--db-name=${DATABASE_NAME}"
     ]
 dependencies = ["format"]
+
+[tasks.fresh]
+command = "cargo"
+args = ["run", "--", 
+    "--adress=${ADRESS}",
+    "--port=${PORT}",
+    "--db=${DATABASE_URL}",
+    "--db-name=${DATABASE_NAME}",
+    "--fresh=true"
+    ]
+dependencies = ["format"]
+
+[tasks.watch]
+command = "cargo"
+args = ["watch", "-x", 
+    "run -- --adress=${ADRESS} --port=${PORT} --db=${DATABASE_URL} --db-name=${DATABASE_NAME}",
+    ]
+dependencies = ["format"]

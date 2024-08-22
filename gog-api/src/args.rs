@@ -11,4 +11,6 @@ pub struct RunArgs {
     pub db: String,
     #[arg(long)]
     pub db_name: String,
+    #[arg(long, short, default_value_t = false)]
+    pub fresh: bool,
 }

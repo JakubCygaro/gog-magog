@@ -27,7 +27,11 @@ fn configure_services(cfg: &mut web::ServiceConfig) {
     cfg.service(user_scope);
 }
 
-async fn setup_database(db_url: &str, db_name: &str) -> Result<DatabaseConnection, DbErr> {
+async fn setup_database(
+    db_url: &str,
+    db_name: &str,
+    refresh: bool,
+) -> Result<DatabaseConnection, DbErr> {
     use sea_orm_migration::prelude::*;
 
     let db = Database::connect(db_url)
@@ -60,7 +64,9 @@ async fn setup_database(db_url: &str, db_name: &str) -> Result<DatabaseConnectio
         }
         DbBackend::Sqlite => db,
     };
-
+    if refresh {
+        migrator::Migrator::fresh(&db).await?;
+    }
     migrator::Migrator::up(&db, None).await?;
 
     Ok(db)
@@ -72,15 +78,21 @@ async fn main() -> std::io::Result<()> {
 
     let args = run_args::RunArgs::parse();
 
-    log!(Level::Debug, "{:?}", args);
-
+    log!(
+        Level::Info,
+        "Running gog-magog server on {}:{}\nwith database url: {} and database name: {}",
+        &args.adress,
+        &args.port,
+        &args.db,
+        &args.db_name
+    );
     create_and_run_server(&args).await?.await?;
     Ok(())
 }
 
 async fn create_and_run_server(args: &RunArgs) -> std::io::Result<Server> {
     let secret_key = Key::generate();
-    let db = setup_database(&args.db, &args.db_name)
+    let db = setup_database(&args.db, &args.db_name, args.fresh)
         .await
         .unwrap_or_else(|e| panic!("database setup error: {}", e));
 
