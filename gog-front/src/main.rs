@@ -23,10 +23,10 @@ fn App() -> impl IntoView {
     // };
     view!{
         <Router>
-            <nav>
+            <nav class="nav">
                 <Navigation/>
             </nav>
-            <main>
+            <main class="center">
                 <Routes>
                         <Route path="/login" view=LoginForm/>
                         <Route path="/user" view=UserScreen/>
@@ -46,9 +46,11 @@ fn App() -> impl IntoView {
 fn Navigation() -> impl IntoView {
     use leptos_router::A;
     view!{
-        <A href="register">"Register"</A>
-        <A href="login">"Login"</A>
-        <A href="user">"User"</A>
+        <ul>
+            <li><A href="register">"Register"</A></li>
+            <li><A href="login">"Login"</A></li>
+            <li><A href="user">"User"</A></li>
+        </ul>
     }
 }
 
@@ -239,16 +241,18 @@ fn LoginForm(
         });
     };
     view!{
-        <Form method="GET" action=""
-            on:submit=on_submit>
-            <label for="login">Login</label><br/>
-            <input id="login" type="text" node_ref=login/><br/>
-            <label for="password">Password</label><br/>
-            <input id="password" type="password" node_ref=password/><br/>
-            <input type="submit"/>
-        </Form>
-        <p>{penis}</p>
-        <p>{outcome}</p>
+        <div>
+            <Form method="GET" action=""
+                on:submit=on_submit>
+                <label for="login">Login</label><br/>
+                <input id="login" type="text" node_ref=login/><br/>
+                <label for="password">Password</label><br/>
+                <input id="password" type="password" node_ref=password/><br/>
+                <input type="submit"/>
+            </Form>
+            <p>{penis}</p>
+            <p>{outcome}</p>
+        </div>
     }
 }
 
