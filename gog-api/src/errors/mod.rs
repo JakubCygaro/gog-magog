@@ -40,5 +40,6 @@ impl ResponseError for TokenError {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum SessionError {}
+// #[derive(Error, Debug)]
+// pub enum SessionError {
+// }

@@ -147,7 +147,6 @@ async fn user_login_token(
         .filter(login_data::Column::Login.eq(login.as_str()))
         .one(db)
         .await;
-    log!(Level::Debug, "token shit");
     let Ok(Some(model)) = user else {
         return Err(TokenError::UserNotFound);
     };
@@ -159,21 +158,24 @@ async fn user_login_token(
     {
         let mut lock = token_session.lock();
         let guard = lock.as_mut().unwrap();
-        return match guard.add_user(&model.login) {
-            Ok(token) => {
-                session.insert("id", token.to_string()).unwrap();
-                log!(Level::Debug, "token: {}", token.to_string());
 
-                if let Some(t) = guard.get_user(&token) {
-                    log!(Level::Debug, "user session exitsts: {}", t);
-                }
+        let token = guard.add_user(&model.login);
+        session.insert("id", token.to_string()).unwrap();
+        log!(Level::Debug, "token: {}", token.to_string());
 
-                Ok(HttpResponse::Accepted()
-                    .reason("password accepted")
-                    .finish())
-            }
-            Err(e) => Err(TokenError::UserSessionError { source: e }),
-        };
+        if let Some(t) = guard.get_user(&token) {
+            log!(Level::Debug, "user session exitsts: {}", t);
+        }
+
+        Ok(HttpResponse::Accepted()
+            .reason("password accepted")
+            .finish())
+        // return match guard.add_user(&model.login) {
+        //     Ok(token) => {
+                
+        //     }
+        //     Err(e) => Err(TokenError::UserSessionError { source: e }),
+        // };
     } else {
         session.remove("id");
         Err(TokenError::WrongPassword)

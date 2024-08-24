@@ -2,11 +2,13 @@ mod webworks;
 mod errors;
 pub(crate) mod data;
 
-use errors::RegisterError;
+use errors::{LoginError, RegisterError};
 use leptos::leptos_dom::logging;
-use leptos::{component, create_action, create_node_ref, create_resource, prelude::*, spawn_local, Callback, Children, ChildrenFn, CollectView, Fragment, IntoView, NodeRef};
+use leptos::svg::view;
+use leptos::{component, create_action, create_node_ref, create_resource, event_target_value, prelude::*, spawn_local, with, Callback, Children, ChildrenFn, CollectView, Fragment, IntoView, NodeRef};
 use leptos::view;
 use leptos_router::{use_navigate, NavigateOptions, Route, Router, Routes};
+use leptos::logging::*;
 fn main() {
     console_error_panic_hook::set_once();
     leptos::mount_to_body(|| view! { <App/> })
@@ -61,12 +63,12 @@ fn Navigation() -> impl IntoView {
 fn RegisterForm() -> impl IntoView {
     use leptos_router::Form;
 
-    let login: NodeRef<leptos::html::Input> = create_node_ref();
-    let password: NodeRef<leptos::html::Input> = create_node_ref();
-    let rep_password: NodeRef<leptos::html::Input> = create_node_ref();
+    let (login, set_login) = create_signal("".to_string());
+    let (password, set_password) = create_signal("".to_string());
+    let (rep_password, set_rep_password) = create_signal("".to_string());
+
 
     let (validation_msg , set_validation_msg) = create_signal("");
-    let (valid, set_valid) = create_signal(false);
     let register_action = create_action(move|usr: &data::UserCreationData|{
         let data = usr.clone();
         async move { webworks::register(&data).await }
@@ -75,13 +77,12 @@ fn RegisterForm() -> impl IntoView {
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
 
-        let login = login.get().unwrap().value();
-        let password = password.get().unwrap().value();
-        let rep = rep_password.get().unwrap().value();
+        let login = login.get();
+        let password = password.get();
+        let rep = rep_password.get();
 
         if rep.ne(&password) {
             set_validation_msg.set("Password does not match");
-            set_valid.set(false);
             return;
         }
 
@@ -90,8 +91,6 @@ fn RegisterForm() -> impl IntoView {
             password: password,
         });
         set_validation_msg.set("");
-        set_valid.set(true);
-
     };
 
     let result = register_action.value();
@@ -136,18 +135,18 @@ fn RegisterForm() -> impl IntoView {
         })
     };
 
-    let validation = move || {
-        valid.with(|v| {
-            if *v {
-                view! {
-                    <span class="color: green;">"✔"</span>
+    let valid = move || {
+        with!(move |password, rep_password| 
+            if password.eq(rep_password) && password.len() > 0 {
+                view!{
+                    <span style="color: green;">"✔"</span>
                 }
             } else {
-                view! {
-                    <span class="color: red;">"✖"</span>
+                view!{
+                    <span style="color: red;">"✖"</span>
                 }
-            }.into_any()
-        })
+            }
+        )
     };
 
     view! {
@@ -156,14 +155,25 @@ fn RegisterForm() -> impl IntoView {
             <Form method="GET" action="" class="formcenter"
                 on:submit=on_submit>
                 <label for="reg-login">"Login:"</label><br/>
-                <input type="text" id="reg-login" node_ref=login/><br/>
+                <input type="text" id="reg-login" 
+                    on:input=move |ev| {
+                        set_login.set(event_target_value(&ev));
+                    }
+                    />
+                <br/>
                 <label for="reg-password">"Password:"</label><br/>
-                <input type="password" id="reg-password" node_ref=password/>
-                {validation}
+                <input type="password" id="reg-password" 
+                    on:input=move |ev| {
+                       set_password.set(event_target_value(&ev)); 
+                    }/>
+                {valid}
                 <br/>
                 <label for="reg-rep-password">"Repeat password:"</label><br/>
-                <input type="password" id="reg-rep-password" node_ref=rep_password/>
-                {validation}
+                <input type="password" id="reg-rep-password" 
+                    on:input=move |ev| {
+                        set_rep_password.set(event_target_value(&ev));
+                    }/>
+                {valid}
                 <br/>
                 <input type="submit"/><br/>
             </Form>
@@ -203,38 +213,61 @@ fn LoginForm(
         };
 
         get_token_action.dispatch(data);
-        logging::console_log("called");
     };
 
-    //let subbmited = get_token_action.input();
     let pending = get_token_action.pending();
     let result = get_token_action.value();
-    let penis = move || {
+    let logging_in = move || {
         pending.get().then(move|| {"Logging in..."})
-            // .or_else(move|| {
-            //     let navigate =use_navigate();
-            //     navigate("/user", NavigateOptions::default());
-            //     Some("Logging in...")
-            // })
     };
 
     let outcome = move || {
         return result.with(|r| match &r {
             &Some(Ok(())) => {
-
                 spawn_local(async move {
                     let nav = use_navigate();
                     nav("/user", NavigateOptions::default());
                 });
-
-                view!{"Logged in!"}
+                view!{
+                    <p>"Logged in!"</p>
+                }.into_any()
             },
-            &Some(Err(e)) => {
-                logging::console_error(&format!("{:?}", &e));
-                view!{"Failed to log in!"}
+            &Some(Err(err)) => {
+                match err {
+                    LoginError::IncorrectPassword => {
+                        view!{
+                            <p>"Password was incorrect"</p>
+                        }
+                    },
+                    LoginError::NoSuchUser => {
+                        view!{
+                            <p>"No such user exists"</p>
+                        }
+                    },
+                    LoginError::ServerError { status } => {
+                        error!("Server error: {}", status);
+                        view!{
+                            <p>"A server side error has occured"</p>
+                        }
+                    },
+                    LoginError::GlooError { err } => {
+                        error!("gloo_net error: {:?}", err);
+                        view!{
+                            <p>"An error has occured"</p>
+                        }
+                    },
+                    LoginError::Unknown { msg } => {
+                        error!("gloo_net error: {:?}", msg);
+                        view!{
+                            <p>"An unknown error has occured"</p>
+                        }
+                    }
+                }.into_any()
             },
-            _=> {
-                view!{""}
+            None => {
+                view!{
+                    <p>""</p>
+                }.into_any()
             }
         });
     };
@@ -248,7 +281,7 @@ fn LoginForm(
             <input id="password" type="password" node_ref=password/><br/>
             <input type="submit"/>
         </Form>
-        <p>{penis}</p>
+        <p>{logging_in}</p>
         <p>{outcome}</p>
     }
 }
@@ -257,34 +290,8 @@ fn LoginForm(
 
 #[component]
 fn UserScreen() -> impl IntoView {
-    let user_data = create_resource(|| (), 
-        |_| async move {
-            webworks::get_user_data().await
-        });
-    
-    let display_user = move || {
-        let Some(data) = user_data.get() else {
-            return view!{
-                <h1>"Fetching Data..."</h1>
-            };
-        };
-        return match data {
-            Some(user_data) => {
-                view!{
-                    <h1>{user_data.login}</h1>
-                }
-            },
-            None => {
-                view!{
-                    <h1>"You are not logged in"</h1>
-                }
-            }
-        }
-        
-    };
-    use leptos::{Await, Show};
+    use leptos::Await;
     view! {
-        //{display_user}
         <Await
             future=|| webworks::get_user_data()
             let:data
