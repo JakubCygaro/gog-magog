@@ -12,7 +12,7 @@ minify = "never"
 no_sri = false
 
 [watch]
-watch = ["css/"]
+watch = []
 ignore = []
 
 [serve]

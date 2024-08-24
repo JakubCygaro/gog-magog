@@ -396,6 +396,7 @@ dependencies = [
  "leptos_router",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]

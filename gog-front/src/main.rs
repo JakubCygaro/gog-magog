@@ -1,16 +1,12 @@
-use std::result;
+mod webworks;
+mod errors;
+pub(crate) mod data;
 
-use gloo_net::http::Request;
-use leptos::ev::{SubmitEvent};
+use errors::RegisterError;
 use leptos::leptos_dom::logging;
-use leptos::svg::view;
 use leptos::{component, create_action, create_node_ref, create_resource, prelude::*, spawn_local, Callback, Children, ChildrenFn, CollectView, Fragment, IntoView, NodeRef};
 use leptos::view;
-use leptos_router::{use_navigate, NavigateOptions, Route, RouteProps, Router, RouterProps, Routes, RoutesProps};
-use anyhow::{anyhow, Result};
-
-const URL_BASE: &'static str = "http://localhost:8081/";
-
+use leptos_router::{use_navigate, NavigateOptions, Route, Router, Routes};
 fn main() {
     console_error_panic_hook::set_once();
     leptos::mount_to_body(|| view! { <App/> })
@@ -27,16 +23,18 @@ fn App() -> impl IntoView {
                 <Navigation/>
             </nav>
             <main class="center">
-                <Routes>
-                        <Route path="/login" view=LoginForm/>
-                        <Route path="/user" view=UserScreen/>
-                        <Route path="/register" view=RegisterForm/>
-                        <Route path="*any" view=move ||{
-                            view!{
-                                <p>"Not Found"</p>
-                            }
-                        }/>
-                </Routes>
+                <div>
+                    <Routes>
+                            <Route path="/login" view=LoginForm/>
+                            <Route path="/user" view=UserScreen/>
+                            <Route path="/register" view=RegisterForm/>
+                            <Route path="*any" view=move ||{
+                                view!{
+                                    <h1 style="text-align: center;">"Not Found"</h1>
+                                }
+                            }/>
+                    </Routes>
+                </div>
             </main>
         </Router>
     }
@@ -54,55 +52,10 @@ fn Navigation() -> impl IntoView {
     }
 }
 
-use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Serialize)]
-struct LoginData {
-    login: String,
-    password: String
-}
-
-async fn get_token(data: &LoginData) -> Result<(), anyhow::Error> {
-    use gloo_net::http::Request;
-
-    let body = serde_json::to_string(data)?;
 
 
 
-    let resp = Request::post(&(URL_BASE.to_owned() + "user/token"))
-        .header("Content-Type", "application/json")
-        .credentials(leptos::web_sys::RequestCredentials::Include)
-        .body(body)
-        .or_else(|e| Err(anyhow!(e)))?
-        .send()
-        .await
-        .or_else(|e| Err(anyhow!(e)))?;
 
-
-    Ok(())
-}
-
-#[derive(serde::Deserialize, serde::Serialize, Clone)]
-pub struct UserCreationData {
-    login: String,
-    password: String,
-}
-
-
-async fn register(user_creation: &UserCreationData) -> Result<(), anyhow::Error> {
-    let body = serde_json::to_string(&user_creation).unwrap();
-    let resp = Request::post(&(URL_BASE.to_owned()+ "user/create"))
-        .header("Content-Type", "application/json")
-        .body(&body)
-        .or_else(|e| Err(e))?
-        .send()
-        .await;
-    match resp {
-        Ok(_) => Ok(()),
-        _ => Err(anyhow!("failed to register"))
-    }
-        
-}
 
 #[component]
 fn RegisterForm() -> impl IntoView {
@@ -112,11 +65,11 @@ fn RegisterForm() -> impl IntoView {
     let password: NodeRef<leptos::html::Input> = create_node_ref();
     let rep_password: NodeRef<leptos::html::Input> = create_node_ref();
 
-    let (msg , set_msg) = create_signal("");
-    
-    let register_action = create_action(move|usr: &UserCreationData|{
+    let (validation_msg , set_validation_msg) = create_signal("");
+    let (valid, set_valid) = create_signal(false);
+    let register_action = create_action(move|usr: &data::UserCreationData|{
         let data = usr.clone();
-        async move { register(&data).await }
+        async move { webworks::register(&data).await }
     });
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
@@ -127,15 +80,17 @@ fn RegisterForm() -> impl IntoView {
         let rep = rep_password.get().unwrap().value();
 
         if rep.ne(&password) {
-            set_msg.set("Password incorrect");
+            set_validation_msg.set("Password does not match");
+            set_valid.set(false);
             return;
         }
 
-        register_action.dispatch(UserCreationData{ 
+        register_action.dispatch(data::UserCreationData{ 
             login: login,
             password: password,
         });
-        set_msg.set("");
+        set_validation_msg.set("");
+        set_valid.set(true);
 
     };
 
@@ -146,32 +101,75 @@ fn RegisterForm() -> impl IntoView {
             &Some(Ok(_)) => {
                 let nav = leptos_router::use_navigate();
                 nav("/login", NavigateOptions::default());
-                move || {
-                    "Registered successfuly"
+                view!{
+                    <p>"Registered successfuly"</p>
+                }.into_any()
+            },
+            &Some(Err(err)) => {
+                match err {
+                    RegisterError::UserAlreadyExists => view!{
+                        <p>"User already exists"</p>
+                    }.into_any(),
+                    RegisterError::ServerError{status} => {
+                        logging::console_error(status);
+                        view! {
+                            <p>"A server side has error occured"</p>
+                        }.into_any()
+                    },
+                    RegisterError::GlooError { err } => {
+                        logging::console_error(&err.to_string());
+                        view!{
+                            <p>"An error has occured"</p>
+                        }.into_any()
+                    },
+                    RegisterError::Unknown { msg } => {
+                        logging::console_error(msg);
+                        view!{
+                            <p>"An unknown has error occured"</p>
+                        }.into_any()
+                    }
                 }
             },
-            &Some(Err(_)) => {
-                move || {
-                    "Could not register user"
+            None => view! {
+                <p></p>
+            }.into_any()
+        })
+    };
+
+    let validation = move || {
+        valid.with(|v| {
+            if *v {
+                view! {
+                    <span class="color: green;">"✔"</span>
                 }
-            },
-            _ => move || { "An error occured" }
+            } else {
+                view! {
+                    <span class="color: red;">"✖"</span>
+                }
+            }.into_any()
         })
     };
 
     view! {
-        <Form method="GET" action=""
-            on:submit=on_submit>
-            <label for="reg-login">"Login:"</label><br/>
-            <input type="text" id="reg-login" node_ref=login/><br/>
-            <label for="reg-password">"Password:"</label><br/>
-            <input type="password" id="reg-password" node_ref=password/><br/>
-            <label for="reg-rep-password">"Repeat password:"</label><br/>
-            <input type="password" id="reg-rep-password" node_ref=rep_password/><br/>
-            <input type="submit"/><br/>
-        </Form>
-        <p>{msg}</p>
-        <p>{register_result}</p>
+        <div>
+            <h3 style="text-align: center;">"Register a new account"</h3>
+            <Form method="GET" action="" class="formcenter"
+                on:submit=on_submit>
+                <label for="reg-login">"Login:"</label><br/>
+                <input type="text" id="reg-login" node_ref=login/><br/>
+                <label for="reg-password">"Password:"</label><br/>
+                <input type="password" id="reg-password" node_ref=password/>
+                {validation}
+                <br/>
+                <label for="reg-rep-password">"Repeat password:"</label><br/>
+                <input type="password" id="reg-rep-password" node_ref=rep_password/>
+                {validation}
+                <br/>
+                <input type="submit"/><br/>
+            </Form>
+            <p>{validation_msg}</p>
+            <p>{register_result}</p>
+        </div>
     }
 }
 
@@ -184,9 +182,9 @@ fn LoginForm(
     let login: NodeRef<leptos::html::Input> = create_node_ref();
     let password: NodeRef<leptos::html::Input> = create_node_ref();
 
-    let get_token_action = create_action(|input: &LoginData|{
+    let get_token_action = create_action(|input: &data::LoginData|{
         let input = input.clone();
-        async move { get_token(&input).await }
+        async move { webworks::get_token(&input).await }
     });
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
@@ -199,7 +197,7 @@ fn LoginForm(
             .expect("<input id=\"password\"> should be mounted")
             .value();
 
-        let data = LoginData{
+        let data = data::LoginData{
             login: login,
             password: password
         };
@@ -241,57 +239,27 @@ fn LoginForm(
         });
     };
     view!{
-        <div>
-            <Form method="GET" action=""
-                on:submit=on_submit>
-                <label for="login">Login</label><br/>
-                <input id="login" type="text" node_ref=login/><br/>
-                <label for="password">Password</label><br/>
-                <input id="password" type="password" node_ref=password/><br/>
-                <input type="submit"/>
-            </Form>
-            <p>{penis}</p>
-            <p>{outcome}</p>
-        </div>
+        <h3 style="text-align: center;">"Log in to an account"</h3>
+        <Form method="GET" action="" class="formcenter"
+            on:submit=on_submit>
+            <label for="login">Login</label><br/>
+            <input id="login" type="text" node_ref=login/><br/>
+            <label for="password">Password</label><br/>
+            <input id="password" type="password" node_ref=password/><br/>
+            <input type="submit"/>
+        </Form>
+        <p>{penis}</p>
+        <p>{outcome}</p>
     }
 }
 
-#[derive(Clone, serde::Deserialize, Serialize)]
-pub struct UserData {
-    pub login: String,
-    pub id: String,
-    pub description: String,
-}
 
-
-async fn get_user_data() -> Option<UserData> {
-    use gloo_net::http::Request;
-
-    let response = Request::get("http://localhost:8081/user/data")
-        .credentials(leptos::web_sys::RequestCredentials::Include)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .or_else(|e| Err(anyhow!(e)));
-
-    let Ok(response) = response else {
-        return None;
-    };
-
-    let data = response.json::<UserData>().await;
-
-    match data {
-        Ok(d) => Some(d),
-        Err(_) => None
-    }
-        
-}
 
 #[component]
 fn UserScreen() -> impl IntoView {
     let user_data = create_resource(|| (), 
         |_| async move {
-            get_user_data().await
+            webworks::get_user_data().await
         });
     
     let display_user = move || {
@@ -318,7 +286,7 @@ fn UserScreen() -> impl IntoView {
     view! {
         //{display_user}
         <Await
-            future=|| get_user_data()
+            future=|| webworks::get_user_data()
             let:data
         >
             <DisplayUser user_data=data.clone()/>
@@ -327,7 +295,7 @@ fn UserScreen() -> impl IntoView {
 }
 
 #[component]
-fn DisplayUser(user_data: Option<UserData>) -> impl IntoView {
+fn DisplayUser(user_data: Option<data::UserData>) -> impl IntoView {
     let Some(user_data) = user_data else {
         return view! {
             <h1>"User not logged in"</h1>

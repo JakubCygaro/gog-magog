@@ -13,3 +13,4 @@ gloo-net = { version = "0.6.0", features = ["http"] }
 serde_json = { version = "1.0.125" }
 serde = { version = "1.0.208", features = ["derive"] }
 anyhow = "1.0.86"
+thiserror = "1.0.63" 

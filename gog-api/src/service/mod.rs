@@ -67,7 +67,7 @@ async fn user_create(
 
             let data = entity::user_data::ActiveModel {
                 user_id: active.user_id.clone(),
-                description: sea_orm::ActiveValue::Set("".to_owned())
+                description: sea_orm::ActiveValue::Set("".to_owned()),
             };
             if let Err(db_err) = LoginData::insert(active.clone()).exec(db).await {
                 log!(
