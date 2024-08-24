@@ -14,11 +14,11 @@ pub enum TokenError {
         #[from]
         source: actix_session::SessionInsertError,
     },
-    #[error("User session error")]
-    UserSessionError {
-        #[from]
-        source: SessionError,
-    },
+    // #[error("User session error")]
+    // UserSessionError {
+    //     #[from]
+    //     source: SessionError,
+    // },
 }
 
 impl ResponseError for TokenError {
@@ -33,9 +33,9 @@ impl ResponseError for TokenError {
             &TokenError::SessionError { source: _ } => HttpResponse::InternalServerError()
                 .reason("session error")
                 .finish(),
-            &TokenError::UserSessionError { source: _ } => HttpResponse::InternalServerError()
-                .reason("user session error")
-                .finish(),
+            // &TokenError::UserSessionError { source: _ } => HttpResponse::InternalServerError()
+            //     .reason("user session error")
+            //     .finish(),
         }
     }
 }

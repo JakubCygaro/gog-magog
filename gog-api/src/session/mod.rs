@@ -1,4 +1,3 @@
-use crate::errors::SessionError;
 
 use super::errors;
 use std::borrow::Borrow;
