@@ -1,4 +1,19 @@
+use core::fmt;
+use std::collections::HashMap;
+
 use thiserror::*;
+
+#[derive(serde::Deserialize, Debug)]
+pub struct ValidationErrorBody {
+    pub reason: String,
+    pub errors: HashMap<String, Vec<FieldError>>
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct FieldError {
+    pub code: String,
+    pub message: String
+}
 
 #[derive(Error, Debug)]
 pub enum RegisterError{
@@ -7,7 +22,7 @@ pub enum RegisterError{
         status: String
     },
     #[error("the user already exists")]
-    UserAlreadyExists,
+    ValidationError(ValidationErrorBody),
     #[error("unknown error `{msg:?}`")]
     Unknown{
         msg: String
@@ -18,6 +33,7 @@ pub enum RegisterError{
         err: gloo_net::Error
     }
 }
+
 
 #[derive(Error, Debug)]
 pub enum LoginError {

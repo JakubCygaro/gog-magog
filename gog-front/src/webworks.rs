@@ -44,7 +44,12 @@ pub async fn register(user_creation: &UserCreationData) -> Result<(), RegisterEr
     match resp {
         Ok(resp) => {
             match resp.status() {
-                400 => Err(RegisterError::UserAlreadyExists),
+                400 => {
+                    let Ok(body) = resp.json::<ValidationErrorBody>().await else {
+                        return Err(RegisterError::Unknown { msg: "failed to read json response".to_string() })
+                    };
+                    Err(RegisterError::ValidationError(body))
+                },
                 201 => Ok(()),
                 _ => Err(RegisterError::ServerError { status: resp.status_text() }),
             }
@@ -55,7 +60,7 @@ pub async fn register(user_creation: &UserCreationData) -> Result<(), RegisterEr
 }
 
 pub async fn get_user_data() -> Option<UserData> {
-    let response = Request::get("http://localhost:8081/user/data")
+    let response = Request::get(&(URL_BASE.to_owned()+ "user/data"))
         .credentials(leptos::web_sys::RequestCredentials::Include)
         .header("Content-Type", "application/json")
         .send()
@@ -73,4 +78,32 @@ pub async fn get_user_data() -> Option<UserData> {
         Err(_) => None
     }
         
+}
+
+pub async fn update_user_data(data: &UserData) -> Result<()> {
+    // let body = serde_json::to_string(&data);
+    let response = Request::post(&(URL_BASE.to_owned()+ "user/update"))
+        .credentials(leptos::web_sys::RequestCredentials::Include)
+        .header("Content-Type", "application/json")
+        .json(data)
+        .or_else(|e| Err(anyhow!(e)))?
+        .send()
+        .await
+        .or_else(|e| Err(anyhow!(e)))?;
+    // ok ok
+    if response.status() == 200 {
+        Ok(())
+    } else {
+        Err(anyhow!("Update data error"))
+    }
+}
+
+pub async fn logout_user() -> Result<()> {
+    let _resp = Request::post(&(URL_BASE.to_owned()+ "user/logout"))
+        .credentials(leptos::web_sys::RequestCredentials::Include)
+        .header("Content-Type", "application/json")
+        .send()
+        .await
+        .or_else(|e| Err(anyhow!(e)))?;
+    Ok(())
 }

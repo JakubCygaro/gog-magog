@@ -1,3 +1,28 @@
+use std::collections::HashMap;
+
+use validator::{Validate, ValidationError, ValidationErrorsKind};
+
+use crate::entity::user_data;
+
+#[derive(Clone, serde::Deserialize)]
+pub struct UserUpdateData {
+    description: Option<String>,
+}
+
+impl UserUpdateData {
+    pub fn update_model(self, model: &mut user_data::ActiveModel) {
+        if let Some(desc) = self.description {
+            model.description = sea_orm::ActiveValue::Set(desc);
+        }
+    }
+}
+
+#[derive(Clone, serde::Serialize)]
+pub struct ValidationErrorResponse {
+    pub(super) reason: String,
+    pub(super) errors: validator::ValidationErrors,
+}
+
 #[derive(Clone)]
 pub struct DbConnection {
     pub(super) db_connection: sea_orm::DatabaseConnection,
@@ -15,9 +40,14 @@ pub struct UserLogin {
     pub(super) login: String,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug, Validate)]
 pub struct UserCreationData {
+    #[validate(length(min = 1), custom(function = "validation::validate_user_login"))]
     pub(super) login: String,
+    #[validate(
+        length(min = 1),
+        custom(function = "validation::validate_user_password")
+    )]
     pub(super) password: String,
 }
 
@@ -26,4 +56,26 @@ pub struct UserDataResponse {
     pub(super) login: String,
     pub(super) id: uuid::Uuid,
     pub(super) description: String,
+}
+
+mod validation {
+    use validator::ValidationError;
+
+    pub fn validate_user_login(login: &str) -> Result<(), ValidationError> {
+        if !login.is_ascii() {
+            Err(ValidationError::new("2137")
+                .with_message("username contains non-ascii characters".into()))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn validate_user_password(password: &str) -> Result<(), ValidationError> {
+        if !password.is_ascii() {
+            Err(ValidationError::new("2138")
+                .with_message("login contains non-ascii characters".into()))
+        } else {
+            Ok(())
+        }
+    }
 }

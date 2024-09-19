@@ -1,4 +1,6 @@
 mod objects;
+use crate::entity::login_data;
+
 use super::entity;
 use super::entity::prelude::*;
 use super::errors;
@@ -9,15 +11,86 @@ use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
-use log::{debug, error, log, Level};
+use log::{debug, error, info, log, Level};
 pub use objects::DbConnection;
 use objects::{UserCreationData, UserDataResponse, UserLogin};
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use std::{str::FromStr, sync::Mutex};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter};
+use std::{borrow::BorrowMut, collections::HashMap, ops::Deref, str::FromStr, sync::Mutex};
+use uuid::Uuid;
+use validator::Validate;
 
 #[actix_web::get("/")]
 async fn hello_world() -> impl Responder {
-    "hello world"
+    HttpResponse::ImATeapot()
+}
+
+#[actix_web::post("/logout")]
+async fn user_logout(
+    token_session: web::Data<Mutex<dyn TokenSession>>,
+    session: Session,
+) -> impl Responder {
+    let Ok(Some(token)) = session.get::<Uuid>("id") else {
+        return HttpResponse::BadRequest()
+            .reason("no user session token cookie provided")
+            .finish();
+    };
+    session.remove("id");
+
+    let mut lock = token_session.lock();
+    let token_session = lock.as_mut().unwrap();
+
+    token_session.remove_user(&token);
+
+    HttpResponse::Ok().reason("removed session").finish()
+}
+
+#[actix_web::post("/update")]
+async fn user_update(
+    db: web::Data<DbConnection>,
+    update_data: web::Json<objects::UserUpdateData>,
+    token_session: web::Data<Mutex<dyn TokenSession>>,
+    session: Session,
+) -> impl Responder {
+    let sess_result = session.get::<Uuid>("id");
+    let Ok(Some(token)) = sess_result else {
+        error!("{:?}", sess_result.err().unwrap());
+        return HttpResponse::BadRequest()
+            .reason("no session cookie provided")
+            .finish();
+    };
+
+    let mut lock = token_session.lock();
+    let token_session = lock.as_mut().unwrap();
+    let Some(user) = token_session.get_user(&token) else {
+        return HttpResponse::BadRequest()
+            .reason("user not logged in")
+            .finish();
+    };
+    let db = &db.db_connection;
+    let Ok(Some(model)) = LoginData::find_by_id(user).one(db).await else {
+        error!("User login not found");
+        return HttpResponse::InternalServerError().finish();
+    };
+    let Ok(Some(data_model)) = UserData::find_by_id(model.user_id).one(db).await else {
+        error!("User data not found");
+        return HttpResponse::InternalServerError().finish();
+    };
+    debug!("FOUND: {:?}", data_model);
+
+    let mut model: entity::user_data::ActiveModel = data_model.into();
+
+    update_data.0.update_model(&mut model);
+
+    match model.update(db).await {
+        Ok(_) => {
+            info!("Updated");
+            HttpResponse::Ok().reason("updated").finish()
+        }
+        Err(dberr) => {
+            error!("{:?}", dberr);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
 }
 
 #[actix_web::post("/create")]
@@ -26,8 +99,27 @@ async fn user_create(
     app_data: web::Data<DbConnection>,
 ) -> impl Responder {
     log!(Level::Info, "user data: {:?}", creation_data.0);
+    if let Err(e) = creation_data.validate() {
+        error!("Validation errors\n {:?}", e.errors());
+        let resp = objects::ValidationErrorResponse {
+            reason: "Validation Failed".to_owned(),
+            errors: e,
+        };
+        match serde_json::to_string_pretty(&resp) {
+            Err(e) => {
+                error!("Serialization error {}", e);
+                return HttpResponse::InternalServerError().finish();
+            }
+            Ok(json) => {
+                return HttpResponse::BadRequest()
+                    .reason("validation error")
+                    .body(json)
+            }
+        };
+    }
     let creation = &creation_data.0;
     let db = &app_data.db_connection;
+
     use entity::login_data;
     let res = LoginData::find()
         .filter(login_data::Column::Login.eq(creation.login.as_str()))
@@ -172,7 +264,7 @@ async fn user_login_token(
             .finish())
         // return match guard.add_user(&model.login) {
         //     Ok(token) => {
-                
+
         //     }
         //     Err(e) => Err(TokenError::UserSessionError { source: e }),
         // };
@@ -195,18 +287,19 @@ async fn user_data(
             .reason("no user session token")
             .finish();
     };
-    log!(Level::Debug, "id: {}", uuid_string);
+    debug!("id: {}", uuid_string);
     let Ok(uuid) = uuid::Uuid::from_str(&uuid_string) else {
         return HttpResponse::InternalServerError()
             .reason("could not deserialize uuid")
             .finish();
     };
-    log!(Level::Debug, "token: {}", uuid);
+    debug!("token: {}", uuid);
 
-    let sess = &token_session.lock().unwrap();
+    let mut lock = token_session.lock();
+    let sess = lock.as_mut().unwrap();
     let db = &data.db_connection;
     let Some(usr_login) = sess.get_user(&uuid) else {
-        log!(Level::Debug, "no session for token: {}", uuid);
+        debug!("no session for token: {}", uuid);
         return HttpResponse::Forbidden()
             .reason("no such user session")
             .finish();

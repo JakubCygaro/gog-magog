@@ -12,7 +12,7 @@ use std::sync::Mutex;
 use actix_session::{storage::CookieSessionStore, SessionMiddleware};
 use actix_web::{self, cookie::Key, dev::Server, middleware::Logger, web, App, HttpServer};
 use log::{log, Level};
-use sea_orm::{Database, DatabaseConnection, DbBackend, DbErr, Statement};
+use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbBackend, DbErr, Statement};
 use service::DbConnection;
 use session::TokenSession;
 
@@ -23,7 +23,9 @@ fn configure_services(cfg: &mut web::ServiceConfig) {
         .service(service::user_create)
         .service(service::user_exists)
         .service(service::user_login_token)
-        .service(service::user_data);
+        .service(service::user_data)
+        .service(service::user_update)
+        .service(service::user_logout);
     cfg.service(user_scope);
 }
 
@@ -34,9 +36,12 @@ async fn setup_database(
 ) -> Result<DatabaseConnection, DbErr> {
     use sea_orm_migration::prelude::*;
 
-    let db = Database::connect(db_url)
+    let mut c_opt = ConnectOptions::new(db_url);
+    c_opt.sqlx_logging(false);
+
+    let db = Database::connect(c_opt)
         .await
-        .expect("failed to connecto to database");
+        .expect("failed to connect to database");
 
     let _schema_manager = SchemaManager::new(&db);
 
@@ -96,7 +101,7 @@ async fn create_and_run_server(args: &RunArgs) -> std::io::Result<Server> {
         .await
         .unwrap_or_else(|e| panic!("database setup error: {}", e));
 
-    let data = DbConnection::new(db.clone());
+    let db = DbConnection::new(db.clone());
     use std::sync::Arc;
 
     let token_session: Arc<Mutex<dyn TokenSession>> =
@@ -108,7 +113,7 @@ async fn create_and_run_server(args: &RunArgs) -> std::io::Result<Server> {
         let cors = Cors::permissive();
         App::new()
             .configure(configure_services)
-            .app_data(web::Data::new(data.clone()))
+            .app_data(web::Data::new(db.clone()))
             .app_data(token_session.clone())
             .wrap(SessionMiddleware::new(
                 CookieSessionStore::default(),

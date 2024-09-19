@@ -14,7 +14,7 @@ pub struct UserCreationData {
     pub password: String,
 }
 
-#[derive(Clone, serde::Deserialize, Serialize)]
+#[derive(Clone, serde::Deserialize, Serialize, Debug, Default)]
 pub struct UserData {
     pub login: String,
     pub id: String,

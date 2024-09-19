@@ -2,10 +2,12 @@ mod webworks;
 mod errors;
 pub(crate) mod data;
 
+use data::UserData;
 use errors::{LoginError, RegisterError};
-use leptos::leptos_dom::logging;
+use leptos::ev::InputEvent;
+use leptos::leptos_dom::logging::{self, console_error};
 use leptos::svg::view;
-use leptos::{component, create_action, create_node_ref, create_resource, event_target_value, prelude::*, spawn_local, with, Callback, Children, ChildrenFn, CollectView, Fragment, IntoView, NodeRef};
+use leptos::{component, create_action, create_node_ref, create_resource, create_slice, event_target_value, expect_context, prelude::*, provide_context, spawn_local, with, Callback, Children, ChildrenFn, CollectView, Fragment, IntoView, NodeRef};
 use leptos::view;
 use leptos_router::{use_navigate, NavigateOptions, Route, Router, Routes};
 use leptos::logging::*;
@@ -14,11 +16,13 @@ fn main() {
     leptos::mount_to_body(|| view! { <App/> })
 }
 
+
 #[component]
 fn App() -> impl IntoView {
     // let on_submit = move |ev: leptos::ev::SubmitEvent| {
     //     ev.prevent_default();
     // };
+    provide_context(create_rw_signal::<Option<UserData>>(None));
     view!{
         <Router>
             <nav class="nav">
@@ -29,7 +33,8 @@ fn App() -> impl IntoView {
                     <Routes>
                             <Route path="/login" view=LoginForm/>
                             <Route path="/user" view=UserScreen/>
-                            <Route path="/register" view=RegisterForm/>
+                            <Route path="/user/edit" view=EditUser/>
+                            <Route path="/register" view=RegisterForm></Route>
                             <Route path="*any" view=move ||{
                                 view!{
                                     <h1 style="text-align: center;">"Not Found"</h1>
@@ -47,8 +52,8 @@ fn Navigation() -> impl IntoView {
     use leptos_router::A;
     view!{
         <ul>
-            <li><A href="register">"Register"</A></li>
-            <li><A href="login">"Login"</A></li>
+            <li style="float: right;"><A href="register">"Register"</A></li>
+            <li style="float: right;"><A href="login">"Login"</A></li>
             <li><A href="user">"User"</A></li>
         </ul>
     }
@@ -102,36 +107,58 @@ fn RegisterForm() -> impl IntoView {
                 nav("/login", NavigateOptions::default());
                 view!{
                     <p>"Registered successfuly"</p>
-                }.into_any()
+                }.into_view()
             },
             &Some(Err(err)) => {
                 match err {
-                    RegisterError::UserAlreadyExists => view!{
-                        <p>"User already exists"</p>
-                    }.into_any(),
+                    RegisterError::ValidationError(body) => {
+                        let reason = &body.reason;
+                        let errors = &body.errors.iter()
+                            .map(|(k, v)| {
+
+                                let errs = v.iter()
+                                    .map(|e| {
+                                        view! {
+                                            <li>{e.message.clone()}</li>
+                                        }
+                                    }).collect_view();
+
+                                view!{
+                                    {k}
+                                    <ul>{errs}</ul>
+                                }
+                            }).collect_view();
+                        view!{
+                            <p>{reason}</p>
+                            <p>"Reported errors:"</p>
+                            <ul>
+                                {errors}
+                            </ul>
+                        }.into_view()
+                    },
                     RegisterError::ServerError{status} => {
                         logging::console_error(status);
                         view! {
                             <p>"A server side has error occured"</p>
-                        }.into_any()
+                        }.into_view()
                     },
                     RegisterError::GlooError { err } => {
                         logging::console_error(&err.to_string());
                         view!{
                             <p>"An error has occured"</p>
-                        }.into_any()
+                        }.into_view()
                     },
                     RegisterError::Unknown { msg } => {
                         logging::console_error(msg);
                         view!{
                             <p>"An unknown has error occured"</p>
-                        }.into_any()
+                        }.into_view()
                     }
-                }
+                }.into_view()
             },
             None => view! {
                 <p></p>
-            }.into_any()
+            }.into_view()
         })
     };
 
@@ -302,15 +329,112 @@ fn UserScreen() -> impl IntoView {
 }
 
 #[component]
+fn EditUser() -> impl IntoView {
+    let user_data_state = expect_context::<RwSignal<Option<UserData>>>();
+    let Some(user_data) = user_data_state.get() else {
+        let nav = use_navigate();
+        nav("/user", NavigateOptions::default());
+        return view! {}.into_view()
+    };
+    let (data, set_data) = create_signal(user_data);
+
+    let edit_desc = move |ev: leptos::ev::Event| {
+        set_data.update(|d| d.description = event_target_value(&ev));
+    };
+
+    let update_action = create_action(|input: &data::UserData|{
+        let input = input.clone();
+        async move { webworks::update_user_data(&input).await }
+    });
+
+    let pending = update_action.pending();
+    let result = update_action.value();
+    let outcome = move || {
+        result.with(|r| {
+            match r {
+                Some(Ok(_)) => "Updated user data!",
+                Some(Err(e)) => {
+                    console_error(&format!("{:?}", e));
+                    "Failed to update data!"
+                }
+                _ => ""
+            }
+        })
+    };
+    let updating = move || {
+        if pending.get() {
+            view!{ "Updating data..." }
+        } else {
+            view!{ "" }
+        }
+    };
+
+    let on_save = move |_| {
+        let user_data = data.get();
+        update_action.dispatch(user_data);
+    };
+
+    view! {
+        <div>
+            <h1>"Editing profile of user: " {data.get().login}</h1>
+            <p>"Description:"</p>
+            <input type="text"
+                on:input=edit_desc
+                prop:value={data.get().description}
+            /><br/>
+            <button
+                on:click=on_save
+                type="button">
+                "Save"
+            </button>
+            <button
+                on:click=move |ev| {
+                    let nav = use_navigate();
+                    nav("/user", NavigateOptions::default());
+                }
+            >
+                "Cancel"
+            </button><br/>
+            <p>{updating}</p>
+            <p>{outcome}</p>
+        </div>
+    }.into_view()
+}
+
+#[component]
 fn DisplayUser(user_data: Option<data::UserData>) -> impl IntoView {
     let Some(user_data) = user_data else {
         return view! {
             <h1>"User not logged in"</h1>
         }.into_view()
     };
+    let logout_action = create_action(|_: &()| {
+        async move { webworks::logout_user().await }        
+    });
+    let data = expect_context::<RwSignal<Option<UserData>>>();
+    data.set(Some(user_data.clone()));
     view! {
         <h1>"Username: " {user_data.login}</h1>
         <p>"Description: " {user_data.description}</p>
+        <button
+            on:click=move|_| {
+                let nav = use_navigate();
+                nav("user/edit", NavigateOptions { 
+                    resolve: true,
+                    ..Default::default() 
+                });
+            }>
+            "Edit profile"
+        </button>
+        <button
+            on:click=move|_| {
+                logout_action.dispatch(());
+                let nav = use_navigate();
+                nav("/login", NavigateOptions::default());
+                data.set(None);
+            }>
+            "Log out"
+        </button>
     }.into_view()
 
 }
