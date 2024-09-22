@@ -2,3 +2,4 @@
 
 pub use super::login_data::Entity as LoginData;
 pub use super::user_data::Entity as UserData;
+pub use super::user_pfp::Entity as UserPfp;

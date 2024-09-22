@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, primitive};
 
 use validator::{Validate, ValidationError, ValidationErrorsKind};
 
@@ -12,7 +12,7 @@ pub struct UserUpdateData {
 impl UserUpdateData {
     pub fn update_model(self, model: &mut user_data::ActiveModel) {
         if let Some(desc) = self.description {
-            model.description = sea_orm::ActiveValue::Set(desc);
+            model.description = sea_orm::ActiveValue::Set(Some(desc));
         }
     }
 }
@@ -56,6 +56,8 @@ pub struct UserDataResponse {
     pub(super) login: String,
     pub(super) id: uuid::Uuid,
     pub(super) description: String,
+    pub(super) gender: Option<String>,
+    pub(super) created: Option<String>,
 }
 
 mod validation {

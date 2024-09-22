@@ -3,13 +3,13 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "user_data")]
+#[sea_orm(table_name = "user_pfp")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub user_id: String,
-    pub description: Option<String>,
-    pub created: Option<String>,
-    pub gender: Option<String>,
+    #[sea_orm(column_type = "Binary(BlobSize::Long)", nullable)]
+    pub data: Option<Vec<u8>>,
+    
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

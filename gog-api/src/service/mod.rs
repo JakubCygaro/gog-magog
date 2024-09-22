@@ -1,12 +1,17 @@
+mod helpers;
 mod objects;
-use crate::entity::login_data;
+pub mod resources;
+use crate::{
+    entity::{login_data, user_pfp},
+    errors::{ServiceError, SessionValidationError},
+};
 
 use super::entity;
 use super::entity::prelude::*;
 use super::errors;
 use super::session::TokenSession;
 use actix_session::Session;
-use actix_web::{self, web, HttpResponse, Responder};
+use actix_web::{self, http::header::ContentType, web::{self, Bytes}, HttpRequest, HttpResponse, Responder, ResponseError};
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
@@ -14,10 +19,14 @@ use argon2::{
 use log::{debug, error, info, log, Level};
 pub use objects::DbConnection;
 use objects::{UserCreationData, UserDataResponse, UserLogin};
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, DbErr, EntityTrait, IntoActiveModel, QueryFilter};
 use std::{borrow::BorrowMut, collections::HashMap, ops::Deref, str::FromStr, sync::Mutex};
 use uuid::Uuid;
 use validator::Validate;
+
+static SESSION_ID: &str = "id";
+
+
 
 #[actix_web::get("/")]
 async fn hello_world() -> impl Responder {
@@ -34,7 +43,7 @@ async fn user_logout(
             .reason("no user session token cookie provided")
             .finish();
     };
-    session.remove("id");
+    session.remove(SESSION_ID);
 
     let mut lock = token_session.lock();
     let token_session = lock.as_mut().unwrap();
@@ -50,30 +59,14 @@ async fn user_update(
     update_data: web::Json<objects::UserUpdateData>,
     token_session: web::Data<Mutex<dyn TokenSession>>,
     session: Session,
-) -> impl Responder {
-    let sess_result = session.get::<Uuid>("id");
-    let Ok(Some(token)) = sess_result else {
-        error!("{:?}", sess_result.err().unwrap());
-        return HttpResponse::BadRequest()
-            .reason("no session cookie provided")
-            .finish();
-    };
+) -> Result<HttpResponse, ServiceError> {
+    let user = helpers::validate_session(&token_session, &session)?;
+    let user_id = helpers::get_user_id(&user, &db).await?;
 
-    let mut lock = token_session.lock();
-    let token_session = lock.as_mut().unwrap();
-    let Some(user) = token_session.get_user(&token) else {
-        return HttpResponse::BadRequest()
-            .reason("user not logged in")
-            .finish();
-    };
     let db = &db.db_connection;
-    let Ok(Some(model)) = LoginData::find_by_id(user).one(db).await else {
-        error!("User login not found");
-        return HttpResponse::InternalServerError().finish();
-    };
-    let Ok(Some(data_model)) = UserData::find_by_id(model.user_id).one(db).await else {
+    let Ok(Some(data_model)) = UserData::find_by_id(user_id).one(db).await else {
         error!("User data not found");
-        return HttpResponse::InternalServerError().finish();
+        return Ok(HttpResponse::InternalServerError().finish());
     };
     debug!("FOUND: {:?}", data_model);
 
@@ -84,11 +77,11 @@ async fn user_update(
     match model.update(db).await {
         Ok(_) => {
             info!("Updated");
-            HttpResponse::Ok().reason("updated").finish()
+            Ok(HttpResponse::Ok().reason("updated").finish())
         }
         Err(dberr) => {
             error!("{:?}", dberr);
-            HttpResponse::InternalServerError().finish()
+            Ok(HttpResponse::InternalServerError().finish())
         }
     }
 }
@@ -159,7 +152,8 @@ async fn user_create(
 
             let data = entity::user_data::ActiveModel {
                 user_id: active.user_id.clone(),
-                description: sea_orm::ActiveValue::Set("".to_owned()),
+                description: sea_orm::ActiveValue::Set(Some("".to_owned())),
+                ..Default::default()
             };
             if let Err(db_err) = LoginData::insert(active.clone()).exec(db).await {
                 log!(
@@ -230,9 +224,9 @@ async fn user_login_token(
     data: web::Data<DbConnection>,
     token_session: web::Data<Mutex<dyn TokenSession>>,
     session: Session,
-) -> Result<HttpResponse, errors::TokenError> {
+) -> Result<HttpResponse, errors::ServiceError> {
     use entity::login_data;
-    use errors::TokenError;
+    use errors::ServiceError;
     let db = &data.db_connection;
     let login = &login_data.login;
     let user = LoginData::find()
@@ -240,7 +234,7 @@ async fn user_login_token(
         .one(db)
         .await;
     let Ok(Some(model)) = user else {
-        return Err(TokenError::UserNotFound);
+        return Err(ServiceError::UserNotFound);
     };
 
     let parsed_hash = PasswordHash::new(&model.hash).unwrap();
@@ -252,7 +246,7 @@ async fn user_login_token(
         let guard = lock.as_mut().unwrap();
 
         let token = guard.add_user(&model.login);
-        session.insert("id", token.to_string()).unwrap();
+        session.insert(SESSION_ID, token.to_string()).unwrap();
         log!(Level::Debug, "token: {}", token.to_string());
 
         if let Some(t) = guard.get_user(&token) {
@@ -262,15 +256,10 @@ async fn user_login_token(
         Ok(HttpResponse::Accepted()
             .reason("password accepted")
             .finish())
-        // return match guard.add_user(&model.login) {
-        //     Ok(token) => {
 
-        //     }
-        //     Err(e) => Err(TokenError::UserSessionError { source: e }),
-        // };
     } else {
-        session.remove("id");
-        Err(TokenError::WrongPassword)
+        session.remove(SESSION_ID);
+        Err(ServiceError::WrongPassword)
     }
 }
 
@@ -279,100 +268,78 @@ async fn user_data(
     data: web::Data<DbConnection>,
     token_session: web::Data<Mutex<dyn TokenSession>>,
     session: Session,
-) -> impl Responder {
+) -> Result<HttpResponse, ServiceError> {
     use entity::login_data;
     log!(Level::Debug, "user data");
-    let Ok(Some(uuid_string)) = session.get::<String>("id") else {
-        return HttpResponse::BadRequest()
-            .reason("no user session token")
-            .finish();
-    };
-    debug!("id: {}", uuid_string);
-    let Ok(uuid) = uuid::Uuid::from_str(&uuid_string) else {
-        return HttpResponse::InternalServerError()
-            .reason("could not deserialize uuid")
-            .finish();
-    };
-    debug!("token: {}", uuid);
 
-    let mut lock = token_session.lock();
-    let sess = lock.as_mut().unwrap();
-    let db = &data.db_connection;
-    let Some(usr_login) = sess.get_user(&uuid) else {
-        debug!("no session for token: {}", uuid);
-        return HttpResponse::Forbidden()
-            .reason("no such user session")
-            .finish();
-    };
-    // let Ok(a) = LoginData::find()
-    //     .filter(login_data::Column::Login.eq(&usr_login))
-    //     .find_with_related(UserData)
-    //     .all(db)
-    //     .await
-    // else {
-    //     return HttpResponse::InternalServerError().finish();
-    // };
-    // let Some((login_d, user_d)) = a.first() else {
-    //     return HttpResponse::InternalServerError().finish();
-    // };
-    // let Some(user_d) = user_d.first() else {
-    //     return HttpResponse::InternalServerError().finish();
-    // };
-    // let data = UserDataResponse {
-    //     login: login_d.login.clone(),
-    //     id: uuid::Uuid::from_str(&user_d.user_id).unwrap(),
-    //     description: user_d.description.clone(),
-    // };
-
-    // return if let Ok(json) = serde_json::to_string(&data) {
-    //     HttpResponse::Ok().body(json)
-    // } else {
-    //     HttpResponse::InternalServerError().finish()
-    // };
+    let usr_login = helpers::validate_session(&token_session, &session)?;
 
     let Ok(Some(usr)) = LoginData::find()
         .filter(login_data::Column::Login.eq(&usr_login))
-        .one(db)
+        .one(&data.db_connection)
         .await
     else {
         log!(Level::Debug, "login data not found");
-        return HttpResponse::NotFound().finish();
+        return Ok(HttpResponse::NotFound().finish());
     };
 
     debug!("user_id: {}", &usr.user_id);
 
     let data = UserData::find()
         .filter(entity::user_data::Column::UserId.eq(&usr.user_id))
-        .one(db)
+        .one(&data.db_connection)
         .await;
-    // else {
-    //     log!(Level::Debug, "user data not found");
-    //     return HttpResponse::NotFound().finish();
-    // };
 
     match data {
         Ok(Some(data)) => {
             let data = UserDataResponse {
                 login: usr.login,
                 id: uuid::Uuid::from_str(&usr.user_id).unwrap(),
-                description: data.description,
+                description: data.description.unwrap_or_default(),
+                gender: data.gender,
+                created: data.created,
             };
 
             if let Ok(json) = serde_json::to_string(&data) {
-                HttpResponse::Ok().body(json)
+                Ok(HttpResponse::Ok().body(json))
             } else {
-                HttpResponse::InternalServerError().finish()
+                Ok(HttpResponse::InternalServerError().finish())
             }
         }
         Ok(None) => {
             debug!("user data not found despite login found");
-            HttpResponse::NotFound().finish()
+            Ok(HttpResponse::NotFound().finish())
         }
         Err(e) => {
             error!("{:?}", e);
-            HttpResponse::InternalServerError()
+            Ok(HttpResponse::InternalServerError()
                 .reason("an error occured")
-                .finish()
+                .finish())
+        }
+    }
+}
+
+#[actix_web::get("/get_pfp/{login}")]
+async fn user_get_pfp(
+    login: web::Path<String>,
+    db: web::Data<DbConnection>,
+) -> Result<HttpResponse, ServiceError> 
+{
+    let id = helpers::get_user_id(&login, &db).await?.to_string();
+    match UserPfp::find_by_id(id).one(&db.db_connection).await? {
+        Some(model) => {
+            match model.data {
+                Some(d) => {
+                    debug!("send payload len: {}", d.len());
+                    Ok(HttpResponse::Found().content_type(ContentType::jpeg()).body(d))
+                },
+                None => {
+                    Ok(HttpResponse::NotFound().reason("user does not have a profile picture").finish())
+                }
+            }
+        },
+        None => {
+            Ok(HttpResponse::NotFound().reason("user does not have a profile picture").finish())
         }
     }
 }

@@ -10,13 +10,14 @@ use clap::Parser;
 use std::sync::Mutex;
 
 use actix_session::{storage::CookieSessionStore, SessionMiddleware};
-use actix_web::{self, cookie::Key, dev::Server, middleware::Logger, web, App, HttpServer};
+use actix_web::{self, cookie::Key, dev::Server, guard, middleware::Logger, web, App, HttpServer};
 use log::{log, Level};
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbBackend, DbErr, Statement};
 use service::DbConnection;
 use session::TokenSession;
 
 fn configure_services(cfg: &mut web::ServiceConfig) {
+    use service::resources;
     cfg.service(service::hello_world);
 
     let user_scope = web::scope("/user")
@@ -25,7 +26,13 @@ fn configure_services(cfg: &mut web::ServiceConfig) {
         .service(service::user_login_token)
         .service(service::user_data)
         .service(service::user_update)
-        .service(service::user_logout);
+        .service(service::user_logout)
+        .service(
+            web::resource("/upload_pfp")
+                .guard(guard::Header("content-type", "image/jpeg"))
+                .guard(guard::Post())
+                .route(web::post().to(resources::user_upload_pfp)))
+        .service(service::user_get_pfp);
     cfg.service(user_scope);
 }
 
