@@ -2,6 +2,7 @@ mod webworks;
 mod errors;
 pub(crate) mod data;
 
+use chrono::NaiveDateTime;
 use data::UserData;
 use errors::{LoginError, RegisterError};
 use leptos::ev::InputEvent;
@@ -377,11 +378,14 @@ fn EditUser() -> impl IntoView {
     view! {
         <div>
             <h1>"Editing profile of user: " {data.get().login}</h1>
+            <div>
             <p>"Description:"</p>
             <input type="text"
                 on:input=edit_desc
                 prop:value={data.get().description}
+                style="width:100%;"
             /><br/>
+            </div>
             <button
                 on:click=on_save
                 type="button">
@@ -414,7 +418,25 @@ fn DisplayUser(user_data: Option<data::UserData>) -> impl IntoView {
     let data = expect_context::<RwSignal<Option<UserData>>>();
     data.set(Some(user_data.clone()));
     view! {
-        <h1>"Username: " {user_data.login}</h1>
+        <div>
+        <table style="width:100%;table-layout:fixed;">
+            <tr>
+                <td style="border: 1px dotted white; padding:10px;">
+                    <h1>{&user_data.login}</h1>
+                    <p>"Joined: " {
+                        format!("{}", &user_data.created.unwrap_or_default().format("%Y-%m-%d"))
+                    }</p>
+                    <p>"Gender: " {&user_data.gender}</p>
+                </td>
+                <td style="text-align: right">
+                    <div>
+                    <img src={webworks::get_pfp_url_for_login(&user_data.login)} 
+                        alt="User profile picture"
+                        style="width:200px;height:200px;"/>
+                    </div>
+                </td>
+            </tr>
+        </table>
         <p>"Description: " {user_data.description}</p>
         <button
             on:click=move|_| {
@@ -435,6 +457,7 @@ fn DisplayUser(user_data: Option<data::UserData>) -> impl IntoView {
             }>
             "Log out"
         </button>
+        </div>
     }.into_view()
 
 }

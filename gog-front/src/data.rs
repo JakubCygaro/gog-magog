@@ -19,6 +19,8 @@ pub struct UserData {
     pub login: String,
     pub id: String,
     pub description: String,
+    pub gender: String,
+    pub created: Option<chrono::DateTime<chrono::Utc>>
 }
 
 

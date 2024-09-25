@@ -37,7 +37,7 @@ pub async fn get_user_id(login: &str, db: &DbConnection) -> Result<Uuid, errors:
         .one(&db.db_connection)
         .await?;
     match usr {
-        Some(u) => Ok(uuid::Uuid::from_str(&u.user_id).unwrap()),
+        Some(u) => Ok(u.user_id),
         None => Err(errors::UserIdError::NoUser),
     }
 }

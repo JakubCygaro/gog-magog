@@ -107,3 +107,7 @@ pub async fn logout_user() -> Result<()> {
         .or_else(|e| Err(anyhow!(e)))?;
     Ok(())
 }
+
+pub fn get_pfp_url_for_login(login: &str) -> String {
+    format!("{}user/get_pfp/{}", URL_BASE, login)
+}

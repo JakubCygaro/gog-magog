@@ -11,21 +11,115 @@ use super::entity::prelude::*;
 use super::errors;
 use super::session::TokenSession;
 use actix_session::Session;
-use actix_web::{self, http::header::ContentType, web::{self, Bytes}, HttpRequest, HttpResponse, Responder, ResponseError};
+use actix_web::{
+    self,
+    http::header::{self, ContentType},
+    web::{self, Bytes},
+    HttpRequest, HttpResponse, Responder, ResponseError,
+};
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
+use chrono::Utc;
 use log::{debug, error, info, log, Level};
 pub use objects::DbConnection;
 use objects::{UserCreationData, UserDataResponse, UserLogin};
-use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, DbErr, EntityTrait, IntoActiveModel, QueryFilter};
+use sea_orm::{
+    prelude::TimeDate, ActiveModelTrait, ActiveValue, ColumnTrait, DbErr, EntityTrait, IntoActiveModel, QueryFilter
+};
 use std::{borrow::BorrowMut, collections::HashMap, ops::Deref, str::FromStr, sync::Mutex};
 use uuid::Uuid;
 use validator::Validate;
 
+type ServiceResult = Result<HttpResponse, ServiceError>;
+
 static SESSION_ID: &str = "id";
 
+#[actix_web::get("/profile/name/{login}")]
+async fn user_profile_name(
+    login: web::Path<String>,
+    db: web::Data<DbConnection>
+) -> Result<HttpResponse, ServiceError> {
+    let login = login.into_inner();
+    let usr = LoginData::find_by_id(&login)
+        .one(&db.db_connection)
+        .await?;
+
+    let Some(usr) = usr else {
+        return Ok(HttpResponse::NotFound()
+            .reason("user does not exist")
+            .finish());
+    };
+
+    let data = UserData::find_by_id(usr.user_id)
+        .one(&db.db_connection)
+        .await?
+        .unwrap();
+
+    let resp = UserDataResponse {
+        created: data.created,
+        description: data.description.unwrap_or_default(),
+        login: login,
+        gender: data.gender,
+        id: data.user_id
+    };
+
+    let json = serde_json::to_string(&resp)
+        .or_else(|e| {
+            error!("user_profile_name serialization error: {:?}", e);
+            Err(ServiceError::ServerError { source: Box::new(e) })
+        })?;
+    
+    Ok(HttpResponse::Found()
+        .append_header(header::ContentType::json())
+        .body(json))
+}
+
+#[actix_web::get("/profile/id/{id}")]
+async fn user_profile_id(
+    id: web::Path<Uuid>,
+    db: web::Data<DbConnection>,
+) -> ServiceResult {
+    // let id = Uuid::from_str(&id)
+    //     .or_else(|e| {
+    //         Err(ServiceError::UserNotFound)
+    //     })?;
+    let id = id.into_inner();
+    let Some(user) = LoginData::find()
+        .filter(login_data::Column::UserId.eq(id))
+        .one(&db.db_connection)
+        .await? else {
+            return Err(ServiceError::UserNotFound);
+        };
+
+    let data = UserData::find_by_id(id)
+        .one(&db.db_connection)
+        .await?;
+
+    match data {
+        Some(model) => {
+            let resp = UserDataResponse {
+                created: model.created,
+                description: model.description.unwrap_or_default(),
+                login: user.login,
+                gender: model.gender,
+                id: model.user_id,
+            };
+            let json = serde_json::to_string(&resp)
+                .or_else(|e|{
+                    error!("user_profile_id serialization error {:?}", e);
+                    Err(ServiceError::ServerError { source: Box::new(e) })
+                })?;
+            Ok(HttpResponse::Found()
+                .append_header(header::ContentType::json())
+                .body(json))
+        },
+        None => {
+            Err(ServiceError::UserNotFound)
+        }
+    }
+}
 
 
 #[actix_web::get("/")]
@@ -147,12 +241,13 @@ async fn user_create(
                 login: sea_orm::ActiveValue::Set(creation.login.clone()),
                 salt: sea_orm::ActiveValue::Set(salt.as_str().to_owned()),
                 hash: sea_orm::ActiveValue::Set(password_hash),
-                user_id: sea_orm::ActiveValue::Set(uuid::Uuid::new_v4().to_string()),
+                user_id: sea_orm::ActiveValue::Set(uuid::Uuid::new_v4()),
             };
 
             let data = entity::user_data::ActiveModel {
                 user_id: active.user_id.clone(),
                 description: sea_orm::ActiveValue::Set(Some("".to_owned())),
+                created: ActiveValue::Set(Some(chrono::Utc::now())),
                 ..Default::default()
             };
             if let Err(db_err) = LoginData::insert(active.clone()).exec(db).await {
@@ -256,7 +351,6 @@ async fn user_login_token(
         Ok(HttpResponse::Accepted()
             .reason("password accepted")
             .finish())
-
     } else {
         session.remove(SESSION_ID);
         Err(ServiceError::WrongPassword)
@@ -286,7 +380,7 @@ async fn user_data(
     debug!("user_id: {}", &usr.user_id);
 
     let data = UserData::find()
-        .filter(entity::user_data::Column::UserId.eq(&usr.user_id))
+        .filter(entity::user_data::Column::UserId.eq(usr.user_id))
         .one(&data.db_connection)
         .await;
 
@@ -294,14 +388,16 @@ async fn user_data(
         Ok(Some(data)) => {
             let data = UserDataResponse {
                 login: usr.login,
-                id: uuid::Uuid::from_str(&usr.user_id).unwrap(),
+                id: usr.user_id,
                 description: data.description.unwrap_or_default(),
                 gender: data.gender,
                 created: data.created,
             };
 
             if let Ok(json) = serde_json::to_string(&data) {
-                Ok(HttpResponse::Ok().body(json))
+                Ok(HttpResponse::Ok()
+                    .append_header(header::ContentType::json())
+                    .body(json))
             } else {
                 Ok(HttpResponse::InternalServerError().finish())
             }
@@ -323,23 +419,22 @@ async fn user_data(
 async fn user_get_pfp(
     login: web::Path<String>,
     db: web::Data<DbConnection>,
-) -> Result<HttpResponse, ServiceError> 
-{
-    let id = helpers::get_user_id(&login, &db).await?.to_string();
+) -> Result<HttpResponse, ServiceError> {
+    let id = helpers::get_user_id(&login, &db).await?;
     match UserPfp::find_by_id(id).one(&db.db_connection).await? {
-        Some(model) => {
-            match model.data {
-                Some(d) => {
-                    debug!("send payload len: {}", d.len());
-                    Ok(HttpResponse::Found().content_type(ContentType::jpeg()).body(d))
-                },
-                None => {
-                    Ok(HttpResponse::NotFound().reason("user does not have a profile picture").finish())
-                }
+        Some(model) => match model.data {
+            Some(d) => {
+                debug!("send payload len: {}", d.len());
+                Ok(HttpResponse::Found()
+                    .content_type(ContentType::jpeg())
+                    .body(d))
             }
+            None => Ok(HttpResponse::NotFound()
+                .reason("user does not have a profile picture")
+                .finish()),
         },
-        None => {
-            Ok(HttpResponse::NotFound().reason("user does not have a profile picture").finish())
-        }
+        None => Ok(HttpResponse::NotFound()
+            .reason("user does not have a profile picture")
+            .finish()),
     }
 }

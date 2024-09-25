@@ -31,8 +31,11 @@ fn configure_services(cfg: &mut web::ServiceConfig) {
             web::resource("/upload_pfp")
                 .guard(guard::Header("content-type", "image/jpeg"))
                 .guard(guard::Post())
-                .route(web::post().to(resources::user_upload_pfp)))
-        .service(service::user_get_pfp);
+                .route(web::post().to(resources::user_upload_pfp)),
+        )
+        .service(service::user_get_pfp)
+        .service(service::user_profile_name)
+        .service(service::user_profile_id);
     cfg.service(user_scope);
 }
 

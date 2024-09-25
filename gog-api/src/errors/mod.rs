@@ -27,10 +27,15 @@ pub enum ServiceError {
         #[from]
         source: UserIdError,
     },
-    #[error("Database error")] 
+    #[error("Database error")]
     DatabaseError {
         #[from]
-        source: DbErr
+        source: DbErr,
+    },
+    #[error("Server error")]
+    ServerError {
+        #[from]
+        source: Box<dyn Error>
     }
 }
 
@@ -48,8 +53,11 @@ impl ResponseError for ServiceError {
                 .finish(),
             ServiceError::UserSessionError { source: s } => s.error_response(),
             ServiceError::UserIdError { source: s } => s.error_response(),
-            Self::DatabaseError { source } => 
-                HttpResponse::InternalServerError().reason("database error").finish()
+            Self::DatabaseError { source } => HttpResponse::InternalServerError()
+                .reason("database error")
+                .finish(),
+            Self::ServerError { source } =>
+                HttpResponse::InternalServerError().finish()
         }
     }
 }

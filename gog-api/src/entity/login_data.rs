@@ -8,7 +8,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub login: String,
     #[sea_orm(unique)]
-    pub user_id: String,
+    pub user_id: Uuid,
     pub salt: String,
     pub hash: String,
 }

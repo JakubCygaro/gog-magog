@@ -6,10 +6,9 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "user_pfp")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub user_id: String,
+    pub user_id: Uuid,
     #[sea_orm(column_type = "Binary(BlobSize::Long)", nullable)]
     pub data: Option<Vec<u8>>,
-    
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -7,12 +7,16 @@ use crate::entity::user_data;
 #[derive(Clone, serde::Deserialize)]
 pub struct UserUpdateData {
     description: Option<String>,
+    gender: Option<String>,
 }
 
 impl UserUpdateData {
     pub fn update_model(self, model: &mut user_data::ActiveModel) {
         if let Some(desc) = self.description {
             model.description = sea_orm::ActiveValue::Set(Some(desc));
+        }
+        if let Some(gender) = self.gender {
+            model.gender = sea_orm::ActiveValue::Set(Some(gender));
         }
     }
 }
@@ -57,7 +61,7 @@ pub struct UserDataResponse {
     pub(super) id: uuid::Uuid,
     pub(super) description: String,
     pub(super) gender: Option<String>,
-    pub(super) created: Option<String>,
+    pub(super) created: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 mod validation {
