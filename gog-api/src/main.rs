@@ -1,4 +1,5 @@
 mod args;
+mod cache;
 mod entity;
 mod errors;
 mod migrator;
@@ -115,16 +116,19 @@ async fn create_and_run_server(args: &RunArgs) -> std::io::Result<Server> {
     use std::sync::Arc;
 
     let token_session: Arc<Mutex<dyn TokenSession>> =
-        Arc::new(Mutex::new(session::DefaultTokenSession::default()));
+        Arc::new(Mutex::new(session::DefaultTokenSession::new(Some(600))));
 
     let token_session = web::Data::from(token_session);
 
+    let cache = Arc::new(Mutex::new(cache::ResourceCache::new()));
+    let cache = web::Data::from(cache);
     Ok(HttpServer::new(move || {
         let cors = Cors::permissive();
         App::new()
             .configure(configure_services)
             .app_data(web::Data::new(db.clone()))
             .app_data(token_session.clone())
+            .app_data(cache.clone())
             .wrap(SessionMiddleware::new(
                 CookieSessionStore::default(),
                 secret_key.clone(),

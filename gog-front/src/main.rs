@@ -4,11 +4,11 @@ pub(crate) mod data;
 
 use chrono::NaiveDateTime;
 use data::UserData;
-use errors::{LoginError, RegisterError};
+use errors::{LoginError, PfpUploadError, RegisterError, UpdateUserError, WebworksError};
 use leptos::ev::InputEvent;
 use leptos::leptos_dom::logging::{self, console_error};
 use leptos::svg::view;
-use leptos::{component, create_action, create_node_ref, create_resource, create_slice, event_target_value, expect_context, prelude::*, provide_context, spawn_local, with, Callback, Children, ChildrenFn, CollectView, Fragment, IntoView, NodeRef};
+use leptos::{component, create_action, create_node_ref, create_resource, create_slice, event_target, event_target_value, expect_context, prelude::*, provide_context, spawn_local, with, Callback, Children, ChildrenFn, CollectView, Fragment, IntoView, NodeRef};
 use leptos::view;
 use leptos_router::{use_navigate, NavigateOptions, Route, Router, Routes};
 use leptos::logging::*;
@@ -137,22 +137,10 @@ fn RegisterForm() -> impl IntoView {
                             </ul>
                         }.into_view()
                     },
-                    RegisterError::ServerError{status} => {
-                        logging::console_error(status);
-                        view! {
-                            <p>"A server side has error occured"</p>
-                        }.into_view()
-                    },
-                    RegisterError::GlooError { err } => {
-                        logging::console_error(&err.to_string());
+                    RegisterError::Webworks { source } => {
+                        logging::console_error(&source.to_string());
                         view!{
                             <p>"An error has occured"</p>
-                        }.into_view()
-                    },
-                    RegisterError::Unknown { msg } => {
-                        logging::console_error(msg);
-                        view!{
-                            <p>"An unknown has error occured"</p>
                         }.into_view()
                     }
                 }.into_view()
@@ -272,21 +260,9 @@ fn LoginForm(
                             <p>"No such user exists"</p>
                         }
                     },
-                    LoginError::ServerError { status } => {
-                        error!("Server error: {}", status);
-                        view!{
-                            <p>"A server side error has occured"</p>
-                        }
-                    },
-                    LoginError::GlooError { err } => {
-                        error!("gloo_net error: {:?}", err);
-                        view!{
-                            <p>"An error has occured"</p>
-                        }
-                    },
-                    LoginError::Unknown { msg } => {
-                        error!("gloo_net error: {:?}", msg);
-                        view!{
+                    LoginError::Webworks { source } => {
+                        error!("webworks error {:?}", source);
+                        view! {
                             <p>"An unknown error has occured"</p>
                         }
                     }
@@ -342,6 +318,9 @@ fn EditUser() -> impl IntoView {
     let edit_desc = move |ev: leptos::ev::Event| {
         set_data.update(|d| d.description = event_target_value(&ev));
     };
+    let edit_gender = move|ev: leptos::ev::Event| {
+        set_data.update(|d| d.gender = event_target_value(&ev));
+    };
 
     let update_action = create_action(|input: &data::UserData|{
         let input = input.clone();
@@ -353,12 +332,50 @@ fn EditUser() -> impl IntoView {
     let outcome = move || {
         result.with(|r| {
             match r {
-                Some(Ok(_)) => "Updated user data!",
-                Some(Err(e)) => {
-                    console_error(&format!("{:?}", e));
-                    "Failed to update data!"
-                }
-                _ => ""
+                Some(Ok(_)) => view!{
+                    <p>"Updated user data!"</p>
+                }.into_view(),
+                Some(Err(e)) => match e {
+                    UpdateUserError::ValidationError(ve) => {
+                        let reason = &ve.reason;
+                        let errors = &ve.errors.iter()
+                            .map(|(k, v)| {
+
+                                let errs = v.iter()
+                                    .map(|e| {
+                                        view! {
+                                            <li>
+                                                <div>
+                                                    <p>
+                                                    {e.message.clone()}
+                                                    {e.params.min.and_then(|v| Some(view!{<p>" min: "{v}</p>}))}
+                                                    {e.params.max.and_then(|v| Some(view!{<p>" max: "{v}</p>}))}
+                                                    </p>
+                                                </div>
+                                            </li>
+                                        }
+                                    }).collect_view();
+
+                                view!{
+                                    <ul>{errs}</ul>
+                                }
+                            }).collect_view();
+                        view!{
+                            <p>{reason}</p>
+                            <p>"Reported errors:"</p>
+                            <ul>
+                                {errors}
+                            </ul>
+                        }.into_view()
+                    },
+                    UpdateUserError::Webworks { source } => {
+                        console_error(&source.to_string());
+                        view! {
+                            <p>"An unknown error has occured"</p>
+                        }.into_view()
+                    }    
+                },
+                _ => view!{<p/>}.into_view()
             }
         })
     };
@@ -375,17 +392,115 @@ fn EditUser() -> impl IntoView {
         update_action.dispatch(user_data);
     };
 
+    let update_pfp_action = create_action(|file: &web_sys::File| {
+        let input = file.clone();
+        async move { 
+            let mut rec = webworks::upload_new_pfp(input);
+            rec.recv().await
+        }
+    });
+    let update_pfp_value = update_pfp_action.value();
+    let pfp_outcome = move || {
+        update_pfp_value.with(|v| {
+            let Some(v) = v else {
+                return view!{}.into_view();
+            };
+            match v {
+                None => view!{}.into_view(),
+                Some(r) => match r {
+                    Ok(_) => {
+                        
+                        view!{<p>"Uploaded!"</p>}.into_view()
+                    },
+                    Err(e) => match e {
+                        PfpUploadError::FileTooBig => {
+                            view!{<p>"The file was too big"</p>}.into_view()
+                        },
+                        PfpUploadError::Websys { js_value } => {
+                            let v = js_value.as_string().unwrap_or_default();
+                            console_error(&v);                            
+                            view!{<p>"An error has occured"</p>}.into_view()
+                        },
+                        _ => {
+                            view!{<p>"An error has occured"</p>}.into_view()
+                        }
+                    }
+                }
+            }
+        })
+    };
+
+    let image_input: NodeRef<leptos::html::Img> = create_node_ref();
+    let on_input_image = move |ev: web_sys::Event| {
+        use leptos::web_sys;
+        let target: web_sys::HtmlInputElement = event_target(&ev);
+        let file_list = target.files().unwrap();
+        let file = file_list.get(0).unwrap();
+        update_pfp_action.dispatch(file);
+        // let obj = ev.value_of();
+        // log!("obj: {}", obj.to_string());
+        // let js_value = leptos::wasm_bindgen::JsValue::from(obj);
+        // let file_list = web_sys::FileList::from(js_value);
+        // let file = file_list.get(0).unwrap();
+        // web_sys::FileList::from(value)
+        // let path = event_target_value(&ev);
+        // match leptos::web_sys::Url::create_object_url_with_blob(&blob) {
+            //     Ok(str) => log!("Ok({})", str),
+            //     Err(jsv) => log!("Err({:?})", jsv)
+            // }
+
+        // let img = image_input.get().unwrap();
+        // img.set_src(&path);
+    };
+
     view! {
         <div>
             <h1>"Editing profile of user: " {data.get().login}</h1>
-            <div>
-            <p>"Description:"</p>
-            <input type="text"
-                on:input=edit_desc
-                prop:value={data.get().description}
-                style="width:100%;"
-            /><br/>
-            </div>
+            <table style="width:100%;table-layout:fixed;border: 1px dotted white; padding:10px;" >
+                <tr>
+                    <td>
+                        <label for="genderinput">"Gender: "</label>
+                        <input type="text" 
+                            name="gender" 
+                            id="generinput"
+                            list="genders"
+                            on:input=edit_gender
+                            prop:value={data.get().gender}/>
+                        <datalist id="genders">
+                            <option value="male"/>
+                            <option value="female"/>
+                        </datalist>
+                        <p>"Edit description:"</p>
+                        <textarea type="text" wrap="hard" rows="20"
+                        on:input=edit_desc
+                        prop:value={data.get().description}
+                        style="width:100%;"
+                        /><br/>
+                    </td>
+                    <td>
+                        <div style="text-align: center">
+                        <img src={webworks::get_pfp_url_for_login(&data.get().login)} 
+                            alt="User profile picture"
+                            style="width:200px;height:200px;"
+                            node_ref=image_input
+                            />
+                        <br/>
+
+                        <label for="pfp">
+                            "Choose a new profile picture"
+                        </label>
+                        <br/>
+                        <input type="file" 
+                            name="pfp-file" 
+                            id="pfp"
+                            accept="image/jpeg"
+                            on:change=on_input_image
+                        />
+                        {pfp_outcome}
+                        </div>
+                    </td>
+                </tr>
+            </table>
             <button
                 on:click=on_save
                 type="button">
@@ -400,7 +515,7 @@ fn EditUser() -> impl IntoView {
                 "Cancel"
             </button><br/>
             <p>{updating}</p>
-            <p>{outcome}</p>
+            {outcome}
         </div>
     }.into_view()
 }
@@ -427,6 +542,7 @@ fn DisplayUser(user_data: Option<data::UserData>) -> impl IntoView {
                         format!("{}", &user_data.created.unwrap_or_default().format("%Y-%m-%d"))
                     }</p>
                     <p>"Gender: " {&user_data.gender}</p>
+                    <p>"Description: " {user_data.description}</p>
                 </td>
                 <td style="text-align: right">
                     <div>
@@ -437,7 +553,6 @@ fn DisplayUser(user_data: Option<data::UserData>) -> impl IntoView {
                 </td>
             </tr>
         </table>
-        <p>"Description: " {user_data.description}</p>
         <button
             on:click=move|_| {
                 let nav = use_navigate();

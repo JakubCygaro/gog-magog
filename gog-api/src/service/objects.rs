@@ -4,9 +4,11 @@ use validator::{Validate, ValidationError, ValidationErrorsKind};
 
 use crate::entity::user_data;
 
-#[derive(Clone, serde::Deserialize)]
+#[derive(Clone, serde::Deserialize, Validate)]
 pub struct UserUpdateData {
+    #[validate(length(max = 250, message = "description was too long"))]
     description: Option<String>,
+    #[validate(length(min = 3, max = 15, message = "gender length was inproper"))]
     gender: Option<String>,
 }
 
@@ -21,7 +23,7 @@ impl UserUpdateData {
     }
 }
 
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, serde::Serialize, Debug)]
 pub struct ValidationErrorResponse {
     pub(super) reason: String,
     pub(super) errors: validator::ValidationErrors,

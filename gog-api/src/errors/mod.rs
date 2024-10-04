@@ -35,8 +35,18 @@ pub enum ServiceError {
     #[error("Server error")]
     ServerError {
         #[from]
-        source: Box<dyn Error>
-    }
+        source: Box<dyn Error>,
+    },
+    #[error("Cache error")]
+    CacheError {
+        #[from]
+        source: crate::cache::CacheError,
+    },
+    #[error("Transaction error")]
+    TransactionError {
+        #[from]
+        source: sea_orm::TransactionError<DbErr>,
+    },
 }
 
 impl ResponseError for ServiceError {
@@ -56,8 +66,9 @@ impl ResponseError for ServiceError {
             Self::DatabaseError { source } => HttpResponse::InternalServerError()
                 .reason("database error")
                 .finish(),
-            Self::ServerError { source } =>
-                HttpResponse::InternalServerError().finish()
+            Self::ServerError { source } => HttpResponse::InternalServerError().finish(),
+            Self::CacheError { source: _ } => HttpResponse::InternalServerError().finish(),
+            Self::TransactionError { source: _ } => HttpResponse::InternalServerError().finish(),
         }
     }
 }

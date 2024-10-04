@@ -1,35 +1,52 @@
+use std::fmt::format;
+
 use anyhow::Error;
+use tokio::sync::mpsc;
 use anyhow::{Result, anyhow};
 use leptos;
 use gloo_net::http::Request;
+use leptos::leptos_dom::logging::console_log;
+use leptos::logging::log;
+use web_sys::js_sys::Promise;
+use web_sys::wasm_bindgen::prelude::Closure;
+use web_sys::wasm_bindgen::{JsCast, JsValue};
 use super::data::*;
 use super::errors::*;
+use leptos::{web_sys, wasm_bindgen};
+use wasm_bindgen_futures::{future_to_promise, spawn_local, JsFuture};
+
+macro_rules! js_closure {
+    ($body:expr) => {
+        Closure::wrap(Box::new($body) as Box<dyn FnMut(_)>)
+    };
+}
+
 const URL_BASE: &'static str = "http://localhost:8081/";
 
 pub async fn get_token(data: &LoginData) -> Result<(), LoginError> {
 
     let body = serde_json::to_string(data)
-        .or_else(|e| Err(LoginError::Unknown { msg: e.to_string() }))?;
+        .or_else(|e| Err(WebworksError::Other { source: Box::new(e) }))?;
 
 
     let resp = Request::post(&(URL_BASE.to_owned() + "user/token"))
         .header("Content-Type", "application/json")
         .credentials(leptos::web_sys::RequestCredentials::Include)
         .body(body)
-        .or_else(|e| Err(LoginError::GlooError { err: e }))?
+        .or_else(|e| Err(WebworksError::GlooError { err: e }))?
         .send()
         .await;
     match resp {
         Ok(response) => {
             match response.status() {
                 202 => Ok(()),
-                500 => Err(LoginError::ServerError { status: response.status_text() }),
+                500 => Err(WebworksError::ServerError { status: response.status_text() })?,
                 403 => Err(LoginError::IncorrectPassword),
                 400 => Err(LoginError::NoSuchUser),
-                _ => Err(LoginError::Unknown { msg: response.status_text() })
+                _ => Err(WebworksError::Unknown { msg: response.status_text() })?
             }
         },
-        Err(e) => Err(LoginError::GlooError { err: e })
+        Err(e) => Err(WebworksError::GlooError { err: e })?
     }
 }
 
@@ -38,7 +55,7 @@ pub async fn register(user_creation: &UserCreationData) -> Result<(), RegisterEr
     let resp = Request::post(&(URL_BASE.to_owned()+ "user/create"))
         .header("Content-Type", "application/json")
         .body(&body)
-        .or_else(|e| Err(RegisterError::GlooError { err: e }))?
+        .or_else(|e| Err(WebworksError::Other { source: Box::new(e) }))?
         .send()
         .await;
     match resp {
@@ -46,15 +63,15 @@ pub async fn register(user_creation: &UserCreationData) -> Result<(), RegisterEr
             match resp.status() {
                 400 => {
                     let Ok(body) = resp.json::<ValidationErrorBody>().await else {
-                        return Err(RegisterError::Unknown { msg: "failed to read json response".to_string() })
+                        return Err(WebworksError::Unknown { msg: "failed to read json response".to_string() })?
                     };
                     Err(RegisterError::ValidationError(body))
                 },
                 201 => Ok(()),
-                _ => Err(RegisterError::ServerError { status: resp.status_text() }),
+                _ => Err(WebworksError::ServerError { status: resp.status_text() })?,
             }
         },
-        Err(e) => Err(RegisterError::Unknown { msg: e.to_string() }),
+        Err(e) => Err(WebworksError::Other { source: Box::new(e) })?,
     }
         
 }
@@ -80,21 +97,26 @@ pub async fn get_user_data() -> Option<UserData> {
         
 }
 
-pub async fn update_user_data(data: &UserData) -> Result<()> {
+pub async fn update_user_data(data: &UserData) -> Result<(), UpdateUserError> {
     // let body = serde_json::to_string(&data);
     let response = Request::post(&(URL_BASE.to_owned()+ "user/update"))
         .credentials(leptos::web_sys::RequestCredentials::Include)
         .header("Content-Type", "application/json")
         .json(data)
-        .or_else(|e| Err(anyhow!(e)))?
+        .or_else(|e| Err(WebworksError::Other { source: Box::new(e) }))?
         .send()
         .await
-        .or_else(|e| Err(anyhow!(e)))?;
+        .or_else(|e| Err(WebworksError::Other { source: Box::new(e) }))?;
     // ok ok
     if response.status() == 200 {
         Ok(())
+    } else if response.status() == 400 {
+        let Ok(body) = response.json::<ValidationErrorBody>().await else {
+            return Err(WebworksError::Unknown { msg: "failed to read json response".to_string() })?
+        };
+        Err(UpdateUserError::ValidationError(body))
     } else {
-        Err(anyhow!("Update data error"))
+        Err(WebworksError::Unknown{ msg: "Update data error".to_string() })?
     }
 }
 
@@ -111,3 +133,68 @@ pub async fn logout_user() -> Result<()> {
 pub fn get_pfp_url_for_login(login: &str) -> String {
     format!("{}user/get_pfp/{}", URL_BASE, login)
 }
+
+// try just passing the read signal from leptos into here and somehow force this 
+// thing to update the state of the component or whatever
+
+pub fn upload_new_pfp(file: web_sys::File) -> mpsc::Receiver<Result<(), PfpUploadError>> {
+    use wasm_bindgen::prelude::*;
+    use wasm_bindgen_futures::JsFuture;
+    use web_sys::{Request, RequestInit, RequestMode, Response};
+
+    let (sender, reciever) = mpsc::channel::<Result<(), PfpUploadError>>(1);
+
+    let reader = web_sys::FileReader::new()
+        .or_else(|e| Err(PfpUploadError::Websys { js_value: e })).unwrap();
+
+    reader.read_as_array_buffer(&file).unwrap();
+    let sender_clone = sender.clone();
+    let sender_clone2 = sender_clone.clone();
+    let sender_clone3 = sender_clone.clone();
+    let reader_clone = reader.clone();
+
+    // let resp_value = JsFuture::from();
+    let resolve = js_closure!(move |v: JsValue|{
+        let response = Response::from(v);
+        match response.status() {
+            200 => sender_clone2.blocking_send(Ok(())).unwrap(),
+            400 => sender_clone2.blocking_send(Err(PfpUploadError::FileTooBig)).unwrap(),
+            _ => sender_clone2.blocking_send(Err(PfpUploadError::Webworks { source: WebworksError::Unknown { msg: "unknown error".to_owned() } })).unwrap()
+        };
+    });
+    let failure = js_closure!(move |v: JsValue|{
+        sender_clone3.blocking_send(Err(PfpUploadError::Websys { js_value: v })).unwrap();
+    });
+
+    let load= js_closure!(move |e: web_sys::Event| {
+
+        let res = reader_clone.result().unwrap();
+        let opts = RequestInit::new();
+        opts.set_method("POST");
+        opts.set_credentials(web_sys::RequestCredentials::Include);
+        opts.set_body(&res);
+        let url = format!("{}user/upload_pfp", URL_BASE);
+        let request = Request::new_with_str_and_init(&url, &opts).unwrap();
+        request.headers()
+            .set("content-type", "image/jpeg").unwrap();
+
+        let window = web_sys::window().unwrap();
+
+        let _ = window.fetch_with_request(&request)
+            .then2(&resolve, &failure);
+    
+    });
+
+    let error = js_closure!( move |e: web_sys::Event| {
+        sender.blocking_send(Err(PfpUploadError::from(WebworksError::Unknown { msg: "error reading file".to_owned() }))).unwrap();
+    });
+
+    reader.add_event_listener_with_callback("load", &load.as_ref().unchecked_ref()).unwrap();
+    reader.add_event_listener_with_callback("error", &error.as_ref().unchecked_ref()).unwrap();
+    
+    load.forget(); error.forget();
+
+    return reciever
+}
+
+

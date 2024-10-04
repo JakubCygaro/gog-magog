@@ -31,12 +31,12 @@ pub trait TokenSession: Send + Sync {
 
 pub struct DefaultTokenSession {
     active_users: Arc<Mutex<SessionMap>>,
-    cleaner: tokio::task::JoinHandle<()>,
+    cleaner: Option<tokio::task::JoinHandle<()>>,
 }
 
-async fn cleaner_task(users_sess: std::sync::Weak<Mutex<SessionMap>>) {
+async fn cleaner_task(users_sess: std::sync::Weak<Mutex<SessionMap>>, interval: u64) {
     loop {
-        tokio::time::sleep(Duration::from_secs(600)).await;
+        tokio::time::sleep(Duration::from_secs(interval)).await;
         let Some(users) = users_sess.upgrade() else {
             break;
         };
@@ -61,14 +61,21 @@ async fn cleaner_task(users_sess: std::sync::Weak<Mutex<SessionMap>>) {
     }
 }
 
-impl Default for DefaultTokenSession {
-    fn default() -> Self {
+impl DefaultTokenSession {
+    ///
+    /// `cleaning_interval` determines if a cleaner task should be spawned
+    /// and how big the time interval between each cleaning is.
+    ///
+    pub fn new(cleaning_interval: Option<u64>) -> Self {
         let users = Arc::new(Mutex::new(SessionMap::new()));
-        let users_for_cleanup = users.clone();
-        let clean = tokio::spawn(async move {
-            let weak = Arc::downgrade(&users_for_cleanup);
-            cleaner_task(weak).await
-        });
+        let mut clean: Option<tokio::task::JoinHandle<()>> = None;
+        if let Some(interval) = cleaning_interval {
+            let users_for_cleanup = users.clone();
+            clean = Some(tokio::spawn(async move {
+                let weak = Arc::downgrade(&users_for_cleanup);
+                cleaner_task(weak, interval).await
+            }));
+        }
         Self {
             active_users: users.clone(),
             cleaner: clean,

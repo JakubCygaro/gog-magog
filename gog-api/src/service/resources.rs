@@ -28,7 +28,6 @@ use uuid::Uuid;
 use validator::Validate;
 
 static PFP_BYTES_MAX: usize = 25_000;
-
 pub async fn user_upload_pfp(
     payload: Bytes,
     db: web::Data<DbConnection>,
@@ -37,7 +36,7 @@ pub async fn user_upload_pfp(
 ) -> Result<HttpResponse, ServiceError> {
     if payload.len() > PFP_BYTES_MAX {
         return Ok(HttpResponse::BadRequest()
-            .reason("uploaded image exceeded allowed size")
+            .reason("uploaded file exceeded allowed size")
             .finish());
     }
 
@@ -45,7 +44,6 @@ pub async fn user_upload_pfp(
     let id = helpers::get_user_id(&login, &db).await?;
 
     let db = &db.db_connection;
-    debug!("payload len: {}", payload.len());
     let mut model = match UserPfp::find_by_id(id).one(db).await? {
         Some(m) => m.into_active_model(),
         None => {

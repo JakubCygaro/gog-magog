@@ -1,5 +1,5 @@
 use core::fmt;
-use std::collections::HashMap;
+use std::{collections::HashMap, error::Error};
 
 use thiserror::*;
 
@@ -11,47 +11,89 @@ pub struct ValidationErrorBody {
 
 #[derive(serde::Deserialize, Debug)]
 pub struct FieldError {
-    pub code: String,
-    pub message: String
+    pub code: Option<String>,
+    pub message: Option<String>,
+    pub params: ValidationParams
+}
+#[derive(serde::Deserialize, Debug)]
+pub struct ValidationParams {
+    pub max: Option<i32>,
+    pub min: Option<i32>
 }
 
 #[derive(Error, Debug)]
-pub enum RegisterError{
-    #[error("internal server error")]
-    ServerError{
-        status: String
-    },
-    #[error("the user already exists")]
-    ValidationError(ValidationErrorBody),
-    #[error("unknown error `{msg:?}`")]
-    Unknown{
-        msg: String
-    },
+pub enum WebworksError {
     #[error("gloo_net error")]
     GlooError{
         #[from]
         err: gloo_net::Error
-    }
-}
-
-
-#[derive(Error, Debug)]
-pub enum LoginError {
+    },
+    #[error("other error `{source:?}`")]
+    Other{
+        #[from]
+        source: Box<dyn Error>
+    },
     #[error("internal server error")]
     ServerError{
         status: String
     },
-    #[error("gloo_net error")]
-    GlooError {
-        #[from]
-        err: gloo_net::Error
-    },
-    #[error("incorrect password supplied")]
-    IncorrectPassword,
-    #[error("no such user exists")]
-    NoSuchUser,
     #[error("unknown error `{msg:?}`")]
     Unknown{
         msg: String
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum RegisterError{
+    #[error("validation error")]
+    ValidationError(ValidationErrorBody),
+    #[error("webworks error")]
+    Webworks{
+        #[from]
+        source: WebworksError
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum UpdateUserError{
+    #[error("validation error")]
+    ValidationError(ValidationErrorBody),
+    #[error("webworks error")]
+    Webworks{
+        #[from]
+        source: WebworksError
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum LoginError {
+    #[error("incorrect password supplied")]
+    IncorrectPassword,
+    #[error("no such user exists")]
+    NoSuchUser,   
+    #[error("webworks error")]
+    Webworks{
+        #[from]
+        source: WebworksError
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum PfpUploadError {
+    #[error("webworks error")]
+    Webworks {
+        #[from]
+        source: WebworksError
+    },
+    #[error("io error")]
+    IoError {
+        #[from]
+        source: std::io::Error
+    },
+    #[error("file too big")]
+    FileTooBig,
+    #[error("web_sys error")]
+    Websys {
+        js_value: leptos::wasm_bindgen::JsValue
     }
 }

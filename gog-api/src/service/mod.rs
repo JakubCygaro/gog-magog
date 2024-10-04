@@ -2,6 +2,7 @@ mod helpers;
 mod objects;
 pub mod resources;
 use crate::{
+    cache::{self, ResourceCache},
     entity::{login_data, user_pfp},
     errors::{ServiceError, SessionValidationError},
 };
@@ -26,9 +27,12 @@ use log::{debug, error, info, log, Level};
 pub use objects::DbConnection;
 use objects::{UserCreationData, UserDataResponse, UserLogin};
 use sea_orm::{
-    prelude::TimeDate, ActiveModelTrait, ActiveValue, ColumnTrait, DbErr, EntityTrait, IntoActiveModel, QueryFilter
+    prelude::TimeDate, ActiveModelTrait, ActiveValue, ColumnTrait, DbErr, EntityTrait,
+    IntoActiveModel, QueryFilter, TransactionError, TransactionTrait,
 };
-use std::{borrow::BorrowMut, collections::HashMap, ops::Deref, str::FromStr, sync::Mutex};
+use std::{
+    borrow::BorrowMut, collections::HashMap, error::Error, ops::Deref, str::FromStr, sync::Mutex,
+};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -39,12 +43,10 @@ static SESSION_ID: &str = "id";
 #[actix_web::get("/profile/name/{login}")]
 async fn user_profile_name(
     login: web::Path<String>,
-    db: web::Data<DbConnection>
+    db: web::Data<DbConnection>,
 ) -> Result<HttpResponse, ServiceError> {
     let login = login.into_inner();
-    let usr = LoginData::find_by_id(&login)
-        .one(&db.db_connection)
-        .await?;
+    let usr = LoginData::find_by_id(&login).one(&db.db_connection).await?;
 
     let Some(usr) = usr else {
         return Ok(HttpResponse::NotFound()
@@ -62,25 +64,23 @@ async fn user_profile_name(
         description: data.description.unwrap_or_default(),
         login: login,
         gender: data.gender,
-        id: data.user_id
+        id: data.user_id,
     };
 
-    let json = serde_json::to_string(&resp)
-        .or_else(|e| {
-            error!("user_profile_name serialization error: {:?}", e);
-            Err(ServiceError::ServerError { source: Box::new(e) })
-        })?;
-    
+    let json = serde_json::to_string(&resp).or_else(|e| {
+        error!("user_profile_name serialization error: {:?}", e);
+        Err(ServiceError::ServerError {
+            source: Box::new(e),
+        })
+    })?;
+
     Ok(HttpResponse::Found()
         .append_header(header::ContentType::json())
         .body(json))
 }
 
 #[actix_web::get("/profile/id/{id}")]
-async fn user_profile_id(
-    id: web::Path<Uuid>,
-    db: web::Data<DbConnection>,
-) -> ServiceResult {
+async fn user_profile_id(id: web::Path<Uuid>, db: web::Data<DbConnection>) -> ServiceResult {
     // let id = Uuid::from_str(&id)
     //     .or_else(|e| {
     //         Err(ServiceError::UserNotFound)
@@ -89,13 +89,12 @@ async fn user_profile_id(
     let Some(user) = LoginData::find()
         .filter(login_data::Column::UserId.eq(id))
         .one(&db.db_connection)
-        .await? else {
-            return Err(ServiceError::UserNotFound);
-        };
+        .await?
+    else {
+        return Err(ServiceError::UserNotFound);
+    };
 
-    let data = UserData::find_by_id(id)
-        .one(&db.db_connection)
-        .await?;
+    let data = UserData::find_by_id(id).one(&db.db_connection).await?;
 
     match data {
         Some(model) => {
@@ -106,21 +105,19 @@ async fn user_profile_id(
                 gender: model.gender,
                 id: model.user_id,
             };
-            let json = serde_json::to_string(&resp)
-                .or_else(|e|{
-                    error!("user_profile_id serialization error {:?}", e);
-                    Err(ServiceError::ServerError { source: Box::new(e) })
-                })?;
+            let json = serde_json::to_string(&resp).or_else(|e| {
+                error!("user_profile_id serialization error {:?}", e);
+                Err(ServiceError::ServerError {
+                    source: Box::new(e),
+                })
+            })?;
             Ok(HttpResponse::Found()
                 .append_header(header::ContentType::json())
                 .body(json))
-        },
-        None => {
-            Err(ServiceError::UserNotFound)
         }
+        None => Err(ServiceError::UserNotFound),
     }
 }
-
 
 #[actix_web::get("/")]
 async fn hello_world() -> impl Responder {
@@ -154,6 +151,17 @@ async fn user_update(
     token_session: web::Data<Mutex<dyn TokenSession>>,
     session: Session,
 ) -> Result<HttpResponse, ServiceError> {
+    let update_data = update_data.into_inner();
+    if let Err(e) = update_data.validate() {
+        let resp = objects::ValidationErrorResponse {
+            reason: "Validation Failed".to_owned(),
+            errors: e,
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        debug!("{}", json);
+        return Ok(HttpResponse::BadRequest().body(json));
+    }
+
     let user = helpers::validate_session(&token_session, &session)?;
     let user_id = helpers::get_user_id(&user, &db).await?;
 
@@ -166,7 +174,7 @@ async fn user_update(
 
     let mut model: entity::user_data::ActiveModel = data_model.into();
 
-    update_data.0.update_model(&mut model);
+    update_data.update_model(&mut model);
 
     match model.update(db).await {
         Ok(_) => {
@@ -192,17 +200,18 @@ async fn user_create(
             reason: "Validation Failed".to_owned(),
             errors: e,
         };
-        match serde_json::to_string_pretty(&resp) {
-            Err(e) => {
-                error!("Serialization error {}", e);
-                return HttpResponse::InternalServerError().finish();
-            }
-            Ok(json) => {
-                return HttpResponse::BadRequest()
-                    .reason("validation error")
-                    .body(json)
-            }
-        };
+        return HttpResponse::BadRequest().json(resp);
+        // match serde_json::to_string_pretty(&resp) {
+        //     Err(e) => {
+        //         error!("Serialization error {}", e);
+        //         return HttpResponse::InternalServerError().finish();
+        //     }
+        //     Ok(json) => {
+        //         return HttpResponse::BadRequest()
+        //             .reason("validation error")
+        //             .body(json)
+        //     }
+        // };
     }
     let creation = &creation_data.0;
     let db = &app_data.db_connection;
@@ -250,27 +259,48 @@ async fn user_create(
                 created: ActiveValue::Set(Some(chrono::Utc::now())),
                 ..Default::default()
             };
-            if let Err(db_err) = LoginData::insert(active.clone()).exec(db).await {
-                log!(
-                    Level::Error,
-                    "database insert error at create user for login: '{}' , err: '{:?}'",
-                    creation.login,
-                    db_err
-                );
-                return HttpResponse::InternalServerError().finish();
-            };
-            if let Err(db_err) = UserData::insert(data).exec(db).await {
-                log!(
-                    Level::Error,
-                    "database insert error at create user data for login: '{}' , err: '{:?}'",
-                    creation.login,
-                    db_err
-                );
-                return match LoginData::delete(active).exec(db).await {
-                    _ => HttpResponse::InternalServerError().finish(),
-                };
-            };
-            HttpResponse::Created().finish()
+
+            let res = db
+                .transaction::<_, (), DbErr>(|txn| {
+                    Box::pin(async move {
+                        active.insert(txn).await?;
+                        data.insert(txn).await?;
+                        Ok(())
+                    })
+                })
+                .await;
+
+            match res {
+                Ok(_) => HttpResponse::Created().finish(),
+                Err(t_err) => {
+                    error!("Could not create new user: {}", t_err.to_string());
+                    HttpResponse::InternalServerError()
+                        .reason("could not create user")
+                        .finish()
+                }
+            }
+
+            // if let Err(db_err) = LoginData::insert(active.clone()).exec(db).await {
+            //     log!(
+            //         Level::Error,
+            //         "database insert error at create user for login: '{}' , err: '{:?}'",
+            //         creation.login,
+            //         db_err
+            //     );
+            //     return HttpResponse::InternalServerError().finish();
+            // };
+            // if let Err(db_err) = UserData::insert(data).exec(db).await {
+            //     log!(
+            //         Level::Error,
+            //         "database insert error at create user data for login: '{}' , err: '{:?}'",
+            //         creation.login,
+            //         db_err
+            //     );
+            //     return match LoginData::delete(active).exec(db).await {
+            //         _ => HttpResponse::InternalServerError().finish(),
+            //     };
+            // };
+            // HttpResponse::Created().finish()
         }
         Err(db_err) => {
             log!(
@@ -320,6 +350,8 @@ async fn user_login_token(
     token_session: web::Data<Mutex<dyn TokenSession>>,
     session: Session,
 ) -> Result<HttpResponse, errors::ServiceError> {
+    session.remove(SESSION_ID);
+
     use entity::login_data;
     use errors::ServiceError;
     let db = &data.db_connection;
@@ -415,26 +447,30 @@ async fn user_data(
     }
 }
 
+static DEFAULT_PFP_PATH: &str = "data/default_pfp.jpeg";
+
 #[actix_web::get("/get_pfp/{login}")]
 async fn user_get_pfp(
     login: web::Path<String>,
     db: web::Data<DbConnection>,
+    cache: web::Data<Mutex<ResourceCache>>,
 ) -> Result<HttpResponse, ServiceError> {
     let id = helpers::get_user_id(&login, &db).await?;
     match UserPfp::find_by_id(id).one(&db.db_connection).await? {
-        Some(model) => match model.data {
-            Some(d) => {
-                debug!("send payload len: {}", d.len());
-                Ok(HttpResponse::Found()
-                    .content_type(ContentType::jpeg())
-                    .body(d))
-            }
-            None => Ok(HttpResponse::NotFound()
-                .reason("user does not have a profile picture")
-                .finish()),
-        },
-        None => Ok(HttpResponse::NotFound()
-            .reason("user does not have a profile picture")
-            .finish()),
+        Some(entity::user_pfp::Model {
+            user_id: _,
+            data: Some(d),
+        }) => Ok(HttpResponse::Found()
+            .content_type(ContentType::jpeg())
+            .body(d)),
+        _ => {
+            let mut lock = cache.lock();
+            let cache = lock.as_mut().unwrap();
+            let pfp = cache.get_or_load(DEFAULT_PFP_PATH).await?;
+            debug!("pfp: {}", pfp.len());
+            Ok(HttpResponse::Found()
+                .content_type(ContentType::jpeg())
+                .body(pfp))
+        }
     }
 }

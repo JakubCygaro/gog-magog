@@ -23,4 +23,3 @@ pub struct UserData {
     pub created: Option<chrono::DateTime<chrono::Utc>>
 }
 
-
