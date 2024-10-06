@@ -1,19 +1,13 @@
-use std::fmt::format;
 
-use anyhow::Error;
+use chrono::DateTime;
+use leptos::logging::log;
 use tokio::sync::mpsc;
 use anyhow::{Result, anyhow};
-use leptos;
 use gloo_net::http::Request;
-use leptos::leptos_dom::logging::console_log;
-use leptos::logging::log;
-use web_sys::js_sys::Promise;
-use web_sys::wasm_bindgen::prelude::Closure;
-use web_sys::wasm_bindgen::{JsCast, JsValue};
+use web_sys::wasm_bindgen::JsCast;
 use super::data::*;
 use super::errors::*;
 use leptos::{web_sys, wasm_bindgen};
-use wasm_bindgen_futures::{future_to_promise, spawn_local, JsFuture};
 
 macro_rules! js_closure {
     ($body:expr) => {
@@ -21,19 +15,17 @@ macro_rules! js_closure {
     };
 }
 
-const URL_BASE: &'static str = "http://localhost:8081/";
+const URL_BASE: &str = "http://localhost:8081/";
 
 pub async fn get_token(data: &LoginData) -> Result<(), LoginError> {
 
-    let body = serde_json::to_string(data)
-        .or_else(|e| Err(WebworksError::Other { source: Box::new(e) }))?;
+    let body = serde_json::to_string(data).map_err(|e| WebworksError::Other { source: Box::new(e) })?;
 
 
     let resp = Request::post(&(URL_BASE.to_owned() + "user/token"))
         .header("Content-Type", "application/json")
         .credentials(leptos::web_sys::RequestCredentials::Include)
-        .body(body)
-        .or_else(|e| Err(WebworksError::GlooError { err: e }))?
+        .body(body).map_err(|e| WebworksError::GlooError { err: e })?
         .send()
         .await;
     match resp {
@@ -54,8 +46,7 @@ pub async fn register(user_creation: &UserCreationData) -> Result<(), RegisterEr
     let body = serde_json::to_string(&user_creation).unwrap();
     let resp = Request::post(&(URL_BASE.to_owned()+ "user/create"))
         .header("Content-Type", "application/json")
-        .body(&body)
-        .or_else(|e| Err(WebworksError::Other { source: Box::new(e) }))?
+        .body(&body).map_err(|e| WebworksError::Other { source: Box::new(e) })?
         .send()
         .await;
     match resp {
@@ -81,8 +72,7 @@ pub async fn get_user_data() -> Option<UserData> {
         .credentials(leptos::web_sys::RequestCredentials::Include)
         .header("Content-Type", "application/json")
         .send()
-        .await
-        .or_else(|e| Err(anyhow!(e)));
+        .await.map_err(|e| anyhow!(e));
 
     let Ok(response) = response else {
         return None;
@@ -102,11 +92,9 @@ pub async fn update_user_data(data: &UserData) -> Result<(), UpdateUserError> {
     let response = Request::post(&(URL_BASE.to_owned()+ "user/update"))
         .credentials(leptos::web_sys::RequestCredentials::Include)
         .header("Content-Type", "application/json")
-        .json(data)
-        .or_else(|e| Err(WebworksError::Other { source: Box::new(e) }))?
+        .json(data).map_err(|e| WebworksError::Other { source: Box::new(e) })?
         .send()
-        .await
-        .or_else(|e| Err(WebworksError::Other { source: Box::new(e) }))?;
+        .await.map_err(|e| WebworksError::Other { source: Box::new(e) })?;
     // ok ok
     if response.status() == 200 {
         Ok(())
@@ -125,27 +113,36 @@ pub async fn logout_user() -> Result<()> {
         .credentials(leptos::web_sys::RequestCredentials::Include)
         .header("Content-Type", "application/json")
         .send()
-        .await
-        .or_else(|e| Err(anyhow!(e)))?;
+        .await.map_err(|e| anyhow!(e))?;
     Ok(())
 }
 
 pub fn get_pfp_url_for_login(login: &str) -> String {
-    format!("{}user/get_pfp/{}", URL_BASE, login)
+    let r= format!("{}user/get_pfp/{}#{}", URL_BASE, login, chrono::Utc::now().timestamp());
+    log!("{}", r);
+    r
+    // format!("{}user/get_pfp/{}", URL_BASE, login)
 }
 
-// try just passing the read signal from leptos into here and somehow force this 
-// thing to update the state of the component or whatever
-
-pub fn upload_new_pfp(file: web_sys::File) -> mpsc::Receiver<Result<(), PfpUploadError>> {
+pub async fn upload_new_pfp(file: web_sys::File) -> mpsc::Receiver<Result<(), PfpUploadError>> {
     use wasm_bindgen::prelude::*;
-    use wasm_bindgen_futures::JsFuture;
-    use web_sys::{Request, RequestInit, RequestMode, Response};
+    
+    use web_sys::{Request, RequestInit, Response};
 
     let (sender, reciever) = mpsc::channel::<Result<(), PfpUploadError>>(1);
+    let file_name = file.name();
+    if !file_name.ends_with(".jpg") && !file_name.ends_with(".jpeg") {
+        sender.send(Err(PfpUploadError::Rejected { reason: "the file is not a valid jpg/jpeg".to_string() })).await
+            .unwrap();
+        return reciever;
+    }
+    if file.size() > 25_000.0 {
+        sender.send(Err(PfpUploadError::Rejected { reason: "this file is to big and will not be sent".to_string() })).await
+            .unwrap();
+        return reciever;
+    }
 
-    let reader = web_sys::FileReader::new()
-        .or_else(|e| Err(PfpUploadError::Websys { js_value: e })).unwrap();
+    let reader = web_sys::FileReader::new().map_err(|e| PfpUploadError::Websys { js_value: e }).unwrap();
 
     reader.read_as_array_buffer(&file).unwrap();
     let sender_clone = sender.clone();
@@ -158,7 +155,7 @@ pub fn upload_new_pfp(file: web_sys::File) -> mpsc::Receiver<Result<(), PfpUploa
         let response = Response::from(v);
         match response.status() {
             200 => sender_clone2.blocking_send(Ok(())).unwrap(),
-            400 => sender_clone2.blocking_send(Err(PfpUploadError::FileTooBig)).unwrap(),
+            400 => sender_clone2.blocking_send(Err(PfpUploadError::Rejected{ reason: response.status_text()})).unwrap(),
             _ => sender_clone2.blocking_send(Err(PfpUploadError::Webworks { source: WebworksError::Unknown { msg: "unknown error".to_owned() } })).unwrap()
         };
     });
@@ -176,7 +173,7 @@ pub fn upload_new_pfp(file: web_sys::File) -> mpsc::Receiver<Result<(), PfpUploa
         let url = format!("{}user/upload_pfp", URL_BASE);
         let request = Request::new_with_str_and_init(&url, &opts).unwrap();
         request.headers()
-            .set("content-type", "image/jpeg").unwrap();
+            .set("content-type", "image/jpg").unwrap();
 
         let window = web_sys::window().unwrap();
 
@@ -189,12 +186,12 @@ pub fn upload_new_pfp(file: web_sys::File) -> mpsc::Receiver<Result<(), PfpUploa
         sender.blocking_send(Err(PfpUploadError::from(WebworksError::Unknown { msg: "error reading file".to_owned() }))).unwrap();
     });
 
-    reader.add_event_listener_with_callback("load", &load.as_ref().unchecked_ref()).unwrap();
-    reader.add_event_listener_with_callback("error", &error.as_ref().unchecked_ref()).unwrap();
+    reader.add_event_listener_with_callback("load", load.as_ref().unchecked_ref()).unwrap();
+    reader.add_event_listener_with_callback("error", error.as_ref().unchecked_ref()).unwrap();
     
     load.forget(); error.forget();
 
-    return reciever
+    reciever
 }
 
 

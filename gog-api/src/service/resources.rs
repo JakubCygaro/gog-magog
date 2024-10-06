@@ -1,31 +1,18 @@
-use super::entity;
 use super::entity::prelude::*;
-use super::errors;
 use super::helpers;
-use super::objects::{UserCreationData, UserDataResponse, UserLogin};
 use super::DbConnection;
 use crate::session::TokenSession;
-use crate::{
-    entity::{login_data, user_pfp},
-    errors::{ServiceError, SessionValidationError},
-};
+use crate::{entity::user_pfp, errors::ServiceError};
 use actix_session::Session;
 use actix_web::{
     self,
     web::{self, Bytes},
-    HttpRequest, HttpResponse, Responder, ResponseError,
+    HttpResponse,
 };
-use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-    Argon2,
-};
-use log::{debug, error, info, log, Level};
-use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DbErr, EntityTrait, IntoActiveModel, QueryFilter,
-};
-use std::{borrow::BorrowMut, collections::HashMap, ops::Deref, str::FromStr, sync::Mutex};
-use uuid::Uuid;
-use validator::Validate;
+use infer;
+use log::debug;
+use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, IntoActiveModel};
+use std::sync::Mutex;
 
 static PFP_BYTES_MAX: usize = 25_000;
 pub async fn user_upload_pfp(
@@ -37,6 +24,19 @@ pub async fn user_upload_pfp(
     if payload.len() > PFP_BYTES_MAX {
         return Ok(HttpResponse::BadRequest()
             .reason("uploaded file exceeded allowed size")
+            .finish());
+    }
+
+    let Some(file_type) = infer::get(&payload) else {
+        return Ok(HttpResponse::BadRequest()
+            .reason("unknown file type")
+            .finish());
+    };
+
+    let mime = file_type.mime_type();
+    if mime != "image/jpg" && mime != "image/jpeg" {
+        return Ok(HttpResponse::BadRequest()
+            .reason("uploaded file was not a valid jpg/jpeg file")
             .finish());
     }
 

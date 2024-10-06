@@ -1,3 +1,5 @@
+#![allow(clippy::all)]
+
 mod args;
 mod cache;
 mod entity;
@@ -30,7 +32,7 @@ fn configure_services(cfg: &mut web::ServiceConfig) {
         .service(service::user_logout)
         .service(
             web::resource("/upload_pfp")
-                .guard(guard::Header("content-type", "image/jpeg"))
+                .guard(guard::Header("content-type", "image/jpg"))
                 .guard(guard::Post())
                 .route(web::post().to(resources::user_upload_pfp)),
         )

@@ -473,7 +473,6 @@ dependencies = [
  "anyhow",
  "chrono",
  "console_error_panic_hook",
- "futures-channel",
  "gloo-net",
  "leptos",
  "leptos_router",

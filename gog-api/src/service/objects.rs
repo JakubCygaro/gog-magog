@@ -1,6 +1,4 @@
-use std::{collections::HashMap, primitive};
-
-use validator::{Validate, ValidationError, ValidationErrorsKind};
+use validator::Validate;
 
 use crate::entity::user_data;
 

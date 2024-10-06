@@ -1,19 +1,10 @@
-use super::errors;
-use actix_web::guard;
 use chrono::DateTime;
-use chrono::Local;
-use chrono::Timelike;
 use chrono::Utc;
 use log::debug;
-use log::log;
-use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::io::BufRead;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::thread::JoinHandle;
 use std::time::Duration;
-use tokio::sync::oneshot::{Receiver, Sender};
 use uuid::Uuid;
 type SessionMap = HashMap<Uuid, UserSessionData>;
 

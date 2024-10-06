@@ -13,7 +13,7 @@ no_sri = false
 
 [watch]
 watch = []
-ignore = []
+ignore = ["../gog-api"]
 
 [serve]
 addresses = ["127.0.0.1"]

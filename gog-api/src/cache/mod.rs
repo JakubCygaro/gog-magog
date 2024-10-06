@@ -34,7 +34,7 @@ impl ResourceCache {
             });
         };
         let mut buf = vec![];
-        let mut f = tokio::fs::File::open(path).await?;
+        let f = tokio::fs::File::open(path).await?;
         let mut reader = tokio::io::BufReader::new(f);
         reader.read_to_end(&mut buf).await?;
         self.resources.insert(path.to_owned(), buf);

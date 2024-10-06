@@ -1,4 +1,3 @@
-use core::fmt;
 use std::{collections::HashMap, error::Error};
 
 use thiserror::*;
@@ -90,8 +89,10 @@ pub enum PfpUploadError {
         #[from]
         source: std::io::Error
     },
-    #[error("file too big")]
-    FileTooBig,
+    #[error("file rejected `{reason}`")]
+    Rejected{
+        reason: String
+    },
     #[error("web_sys error")]
     Websys {
         js_value: leptos::wasm_bindgen::JsValue

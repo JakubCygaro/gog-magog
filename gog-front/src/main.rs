@@ -1,14 +1,13 @@
+#![allow(clippy::pedantic)]
+
 mod webworks;
 mod errors;
 pub(crate) mod data;
 
-use chrono::NaiveDateTime;
 use data::UserData;
-use errors::{LoginError, PfpUploadError, RegisterError, UpdateUserError, WebworksError};
-use leptos::ev::InputEvent;
+use errors::{LoginError, PfpUploadError, RegisterError, UpdateUserError};
 use leptos::leptos_dom::logging::{self, console_error};
-use leptos::svg::view;
-use leptos::{component, create_action, create_node_ref, create_resource, create_slice, event_target, event_target_value, expect_context, prelude::*, provide_context, spawn_local, with, Callback, Children, ChildrenFn, CollectView, Fragment, IntoView, NodeRef};
+use leptos::{component, create_action, create_node_ref, event_target, event_target_value, expect_context, prelude::*, provide_context, spawn_local, with, CollectView, IntoView, NodeRef};
 use leptos::view;
 use leptos_router::{use_navigate, NavigateOptions, Route, Router, Routes};
 use leptos::logging::*;
@@ -93,8 +92,8 @@ fn RegisterForm() -> impl IntoView {
         }
 
         register_action.dispatch(data::UserCreationData{ 
-            login: login,
-            password: password,
+            login,
+            password,
         });
         set_validation_msg.set("");
     };
@@ -153,7 +152,7 @@ fn RegisterForm() -> impl IntoView {
 
     let valid = move || {
         with!(move |password, rep_password| 
-            if password.eq(rep_password) && password.len() > 0 {
+            if password.eq(rep_password) && !password.is_empty() {
                 view!{
                     <span style="color: green;">"✔"</span>
                 }
@@ -224,8 +223,8 @@ fn LoginForm(
             .value();
 
         let data = data::LoginData{
-            login: login,
-            password: password
+            login,
+            password
         };
 
         get_token_action.dispatch(data);
@@ -234,11 +233,11 @@ fn LoginForm(
     let pending = get_token_action.pending();
     let result = get_token_action.value();
     let logging_in = move || {
-        pending.get().then(move|| {"Logging in..."})
+        pending.get().then_some("Logging in...")
     };
 
     let outcome = move || {
-        return result.with(|r| match &r {
+        result.with(|r| match &r {
             &Some(Ok(())) => {
                 spawn_local(async move {
                     let nav = use_navigate();
@@ -273,7 +272,7 @@ fn LoginForm(
                     <p>""</p>
                 }.into_any()
             }
-        });
+        })
     };
     view!{
         <h3 style="text-align: center;">"Log in to an account"</h3>
@@ -297,7 +296,7 @@ fn UserScreen() -> impl IntoView {
     use leptos::Await;
     view! {
         <Await
-            future=|| webworks::get_user_data()
+            future=webworks::get_user_data
             let:data
         >
             <DisplayUser user_data=data.clone()/>
@@ -348,8 +347,8 @@ fn EditUser() -> impl IntoView {
                                                 <div>
                                                     <p>
                                                     {e.message.clone()}
-                                                    {e.params.min.and_then(|v| Some(view!{<p>" min: "{v}</p>}))}
-                                                    {e.params.max.and_then(|v| Some(view!{<p>" max: "{v}</p>}))}
+                                                    {e.params.min.map(|v| view!{<p>" min: "{v}</p>})}
+                                                    {e.params.max.map(|v| view!{<p>" max: "{v}</p>})}
                                                     </p>
                                                 </div>
                                             </li>
@@ -395,10 +394,11 @@ fn EditUser() -> impl IntoView {
     let update_pfp_action = create_action(|file: &web_sys::File| {
         let input = file.clone();
         async move { 
-            let mut rec = webworks::upload_new_pfp(input);
+            let mut rec = webworks::upload_new_pfp(input).await;
             rec.recv().await
         }
     });
+    let pfp_pending = update_pfp_action.pending();
     let update_pfp_value = update_pfp_action.value();
     let pfp_outcome = move || {
         update_pfp_value.with(|v| {
@@ -409,12 +409,12 @@ fn EditUser() -> impl IntoView {
                 None => view!{}.into_view(),
                 Some(r) => match r {
                     Ok(_) => {
-                        
+                        //leptos::document().location().unwrap().reload().unwrap();
                         view!{<p>"Uploaded!"</p>}.into_view()
                     },
                     Err(e) => match e {
-                        PfpUploadError::FileTooBig => {
-                            view!{<p>"The file was too big"</p>}.into_view()
+                        PfpUploadError::Rejected { reason } => {
+                            view!{<p>"File rejected: " {reason}</p>}.into_view()
                         },
                         PfpUploadError::Websys { js_value } => {
                             let v = js_value.as_string().unwrap_or_default();
@@ -430,27 +430,12 @@ fn EditUser() -> impl IntoView {
         })
     };
 
-    let image_input: NodeRef<leptos::html::Img> = create_node_ref();
     let on_input_image = move |ev: web_sys::Event| {
         use leptos::web_sys;
         let target: web_sys::HtmlInputElement = event_target(&ev);
         let file_list = target.files().unwrap();
         let file = file_list.get(0).unwrap();
         update_pfp_action.dispatch(file);
-        // let obj = ev.value_of();
-        // log!("obj: {}", obj.to_string());
-        // let js_value = leptos::wasm_bindgen::JsValue::from(obj);
-        // let file_list = web_sys::FileList::from(js_value);
-        // let file = file_list.get(0).unwrap();
-        // web_sys::FileList::from(value)
-        // let path = event_target_value(&ev);
-        // match leptos::web_sys::Url::create_object_url_with_blob(&blob) {
-            //     Ok(str) => log!("Ok({})", str),
-            //     Err(jsv) => log!("Err({:?})", jsv)
-            // }
-
-        // let img = image_input.get().unwrap();
-        // img.set_src(&path);
     };
 
     view! {
@@ -482,7 +467,6 @@ fn EditUser() -> impl IntoView {
                         <img src={webworks::get_pfp_url_for_login(&data.get().login)} 
                             alt="User profile picture"
                             style="width:200px;height:200px;"
-                            node_ref=image_input
                             />
                         <br/>
 
@@ -496,6 +480,11 @@ fn EditUser() -> impl IntoView {
                             accept="image/jpeg"
                             on:change=on_input_image
                         />
+                        { move || {
+                            pfp_pending.get().then(|| view!{
+                                <p>"Uploading file..."</p>
+                            })
+                        }}
                         {pfp_outcome}
                         </div>
                     </td>

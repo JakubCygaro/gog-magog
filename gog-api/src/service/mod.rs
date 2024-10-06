@@ -1,11 +1,7 @@
 mod helpers;
 mod objects;
 pub mod resources;
-use crate::{
-    cache::{self, ResourceCache},
-    entity::{login_data, user_pfp},
-    errors::{ServiceError, SessionValidationError},
-};
+use crate::{cache::ResourceCache, entity::login_data, errors::ServiceError};
 
 use super::entity;
 use super::entity::prelude::*;
@@ -14,25 +10,21 @@ use super::session::TokenSession;
 use actix_session::Session;
 use actix_web::{
     self,
-    http::header::{self, ContentType},
-    web::{self, Bytes},
-    HttpRequest, HttpResponse, Responder, ResponseError,
+    http::header::{self, CacheDirective, ContentType},
+    web::{self},
+    HttpResponse, Responder,
 };
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
-use chrono::Utc;
 use log::{debug, error, info, log, Level};
 pub use objects::DbConnection;
 use objects::{UserCreationData, UserDataResponse, UserLogin};
 use sea_orm::{
-    prelude::TimeDate, ActiveModelTrait, ActiveValue, ColumnTrait, DbErr, EntityTrait,
-    IntoActiveModel, QueryFilter, TransactionError, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, DbErr, EntityTrait, QueryFilter, TransactionTrait,
 };
-use std::{
-    borrow::BorrowMut, collections::HashMap, error::Error, ops::Deref, str::FromStr, sync::Mutex,
-};
+use std::{error::Error, sync::Mutex};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -462,6 +454,11 @@ async fn user_get_pfp(
             data: Some(d),
         }) => Ok(HttpResponse::Found()
             .content_type(ContentType::jpeg())
+            .append_header(header::CacheControl(vec![
+                CacheDirective::MaxAge(0),
+                CacheDirective::MustRevalidate,
+                CacheDirective::NoStore,
+            ]))
             .body(d)),
         _ => {
             let mut lock = cache.lock();
@@ -470,6 +467,11 @@ async fn user_get_pfp(
             debug!("pfp: {}", pfp.len());
             Ok(HttpResponse::Found()
                 .content_type(ContentType::jpeg())
+                .append_header(header::CacheControl(vec![
+                    CacheDirective::MaxAge(0),
+                    CacheDirective::MustRevalidate,
+                    CacheDirective::NoStore,
+                ]))
                 .body(pfp))
         }
     }
