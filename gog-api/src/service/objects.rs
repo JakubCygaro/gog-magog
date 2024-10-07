@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use validator::Validate;
 
 use crate::entity::user_data;
@@ -84,4 +85,10 @@ mod validation {
             Ok(())
         }
     }
+}
+
+#[derive(Deserialize, Debug, Clone, Validate)]
+pub struct PostCreationData {
+    #[validate(length(min = 1, max = 300, message = "post content of disallowed size"))]
+    pub(super) content: String,
 }

@@ -40,6 +40,8 @@ fn configure_services(cfg: &mut web::ServiceConfig) {
         .service(service::user_profile_name)
         .service(service::user_profile_id);
     cfg.service(user_scope);
+    let posts_scope = web::scope("/posts").service(service::posts::posts_create);
+    cfg.service(posts_scope);
 }
 
 async fn setup_database(

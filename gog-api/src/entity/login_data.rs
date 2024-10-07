@@ -19,6 +19,8 @@ pub enum Relation {
     UserData,
     #[sea_orm(has_many = "super::user_pfp::Entity")]
     UserPfp,
+    #[sea_orm(has_many = "super::posts::Entity")]
+    Posts,
 }
 
 impl Related<super::user_data::Entity> for Entity {

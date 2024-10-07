@@ -1,5 +1,6 @@
 mod helpers;
 mod objects;
+pub mod posts;
 pub mod resources;
 use crate::{cache::ResourceCache, entity::login_data, errors::ServiceError};
 
