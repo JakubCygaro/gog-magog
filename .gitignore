@@ -1,4 +1,4 @@
 gog-api/target
 gog-front/target
 gog-front/dist
-gog-api/data/users.db
+gog-api/data/*.db
