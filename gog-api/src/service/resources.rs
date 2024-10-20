@@ -10,7 +10,6 @@ use actix_web::{
     HttpResponse,
 };
 use infer;
-use log::debug;
 use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, IntoActiveModel};
 use std::sync::Mutex;
 

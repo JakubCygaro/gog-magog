@@ -40,7 +40,11 @@ fn configure_services(cfg: &mut web::ServiceConfig) {
         .service(service::user_profile_name)
         .service(service::user_profile_id);
     cfg.service(user_scope);
-    let posts_scope = web::scope("/posts").service(service::posts::posts_create);
+    let posts_scope = web::scope("/posts")
+        .service(service::posts::posts_create)
+        .service(service::posts::posts_newest)
+        .service(service::posts::posts_user)
+        .service(service::posts::posts_id);
     cfg.service(posts_scope);
 }
 
