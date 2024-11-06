@@ -37,8 +37,12 @@ dependencies = ["format"]
 [tasks.watch]
 command = "cargo"
 args = ["watch", 
-    "-i",
-    "../gog-front/**",
+    "-w",
+    "./src",
+    "-w",
+    "./data",
+    "-w",
+    "./Cargo.toml",
     "-x", 
     "run -- --adress=${ADRESS} --port=${PORT} --db=${DATABASE_URL} --db-name=${DATABASE_NAME}"
     ]

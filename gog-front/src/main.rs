@@ -2,6 +2,8 @@
 
 mod webworks;
 mod errors;
+mod posts;
+
 pub(crate) mod data;
 
 use data::UserData;
@@ -35,6 +37,7 @@ fn App() -> impl IntoView {
                             <Route path="/user" view=UserScreen/>
                             <Route path="/user/edit" view=EditUser/>
                             <Route path="/register" view=RegisterForm></Route>
+                            <Route path="/posts" view=posts::Posts /> 
                             <Route path="*any" view=move ||{
                                 view!{
                                     <h1 style="text-align: center;">"Not Found"</h1>
@@ -55,6 +58,7 @@ fn Navigation() -> impl IntoView {
             <li style="float: right;"><A href="register">"Register"</A></li>
             <li style="float: right;"><A href="login">"Login"</A></li>
             <li><A href="user">"User"</A></li>
+            <li><A href="posts">"Posts"</A></li>
         </ul>
     }
 }
@@ -513,7 +517,7 @@ fn EditUser() -> impl IntoView {
 fn DisplayUser(user_data: Option<data::UserData>) -> impl IntoView {
     let Some(user_data) = user_data else {
         return view! {
-            <h1>"User not logged in"</h1>
+            <h1 style="text-align:center;">"User not logged in"</h1>
         }.into_view()
     };
     let logout_action = create_action(|_: &()| {

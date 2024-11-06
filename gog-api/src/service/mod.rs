@@ -25,7 +25,7 @@ use objects::{UserCreationData, UserDataResponse, UserLogin};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DbErr, EntityTrait, QueryFilter, TransactionTrait,
 };
-use std::{error::Error, sync::Mutex};
+use std::{error::Error, str::FromStr, sync::Mutex};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -448,7 +448,11 @@ async fn user_get_pfp(
     db: web::Data<DbConnection>,
     cache: web::Data<Mutex<ResourceCache>>,
 ) -> Result<HttpResponse, ServiceError> {
-    let id = helpers::get_user_id(&login, &db).await?;
+    let id = if let Ok(uuid) = uuid::Uuid::from_str(&login) {
+        uuid
+    } else {
+        helpers::get_user_id(&login, &db).await?
+    };
     match UserPfp::find_by_id(id).one(&db.db_connection).await? {
         Some(entity::user_pfp::Model {
             user_id: _,

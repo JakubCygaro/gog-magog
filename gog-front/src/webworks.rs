@@ -1,5 +1,6 @@
 
 use chrono::DateTime;
+use leptos::leptos_dom::logging::console_log;
 use leptos::logging::log;
 use tokio::sync::mpsc;
 use anyhow::{Result, anyhow};
@@ -119,7 +120,6 @@ pub async fn logout_user() -> Result<()> {
 
 pub fn get_pfp_url_for_login(login: &str) -> String {
     let r= format!("{}user/get_pfp/{}#{}", URL_BASE, login, chrono::Utc::now().timestamp());
-    log!("{}", r);
     r
     // format!("{}user/get_pfp/{}", URL_BASE, login)
 }
@@ -194,4 +194,24 @@ pub async fn upload_new_pfp(file: web_sys::File) -> mpsc::Receiver<Result<(), Pf
     reciever
 }
 
+pub async fn load_posts(amount: i32) -> Result<Vec<PostData>, WebworksError> {
+    let resp = Request::get(&format!("{}posts/newest/{}", URL_BASE, amount))
+        .send().await?;
+    let text = resp.text().await?;
+    let json = serde_json::from_str::<Vec<PostData>>(&text).unwrap();
+    Ok(json)
+}
+
+pub async fn create_post(data: PostCreationData) -> Result<(), CreatePostError> {
+    let resp = Request::post(&format!("{}posts/create", URL_BASE))
+        .credentials(leptos::web_sys::RequestCredentials::Include)
+        .json(&data).map_err(|e| WebworksError::Other { source: Box::new(e) })?
+        .send()
+        .await.map_err(|e| WebworksError::Other { source: Box::new(e) })?;
+    match resp.status() {
+        201 => Ok(()),
+        400 => Err(CreatePostError::ValidationError(resp.json::<ValidationErrorBody>().await.map_err(|e| WebworksError::Other { source: Box::new(e) })?)),
+        _ => Err(CreatePostError::NotLoggedIn)
+    }
+}
 

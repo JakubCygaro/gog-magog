@@ -98,3 +98,16 @@ pub enum PfpUploadError {
         js_value: leptos::wasm_bindgen::JsValue
     }
 }
+
+#[derive(Error, Debug)]
+pub enum CreatePostError {
+    #[error("user is not logged in")]
+    NotLoggedIn,
+    #[error("validation error")]
+    ValidationError(ValidationErrorBody),
+    #[error("webworks error")]
+    Webworks{
+        #[from]
+        source: WebworksError
+    }
+}

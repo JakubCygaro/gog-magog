@@ -8,6 +8,7 @@ use sea_orm::{
     entity, ActiveModelBehavior, ActiveValue, ColumnTrait, EntityOrSelect, EntityTrait,
     QueryFilter, QueryOrder, QuerySelect,
 };
+use serde::Serialize;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -53,6 +54,7 @@ async fn posts_newest(
     db: Data<DbConnection>,
 ) -> super::ServiceResult {
     let posts = super::entity::posts::Entity::find()
+        .find_also_related(login_data::Entity)
         .order_by_desc(posts::Column::Posted)
         .limit(Some(amount.into_inner()))
         .all(&db.db_connection)
@@ -61,7 +63,30 @@ async fn posts_newest(
     // let body = serde_json::to_string(&posts)
     //     .or_else(|e| Err(super::ServiceError::ServerError{source:Box::new(e)}))?;
 
-    Ok(HttpResponse::Found().json(posts))
+    Ok(HttpResponse::Found().json(
+        posts
+            .into_iter()
+            .map(|e| PostResponse {
+                login: match e.1 {
+                    Some(m) => m.login,
+                    None => String::new(),
+                },
+                content: e.0.content,
+                post_id: e.0.post_id,
+                user_id: e.0.post_id,
+                posted: e.0.posted,
+            })
+            .collect::<Vec<_>>(),
+    ))
+}
+
+#[derive(Serialize)]
+struct PostResponse {
+    login: String,
+    user_id: Uuid,
+    post_id: Uuid,
+    posted: chrono::naive::NaiveDateTime,
+    content: String,
 }
 
 #[derive(serde::Deserialize)]
