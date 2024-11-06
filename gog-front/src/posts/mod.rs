@@ -1,4 +1,4 @@
-use leptos::{create_action, document};
+use leptos::{create_action, document, Callable};
 use leptos::{component, IntoView, view, prelude::*, expect_context, create_resource, Suspense, Show, NodeRef, create_node_ref};
 use web_sys::wasm_bindgen::{self, JsCast};
 use web_sys::{js_sys, HtmlBodyElement};
@@ -13,7 +13,9 @@ macro_rules! js_closure {
     };
 }
 
-
+const LOAD_MORE_AMOUNT: i32 = 10;
+const LOAD_INITIAL:     i32 = 5;
+const INFINITE_LOAD_THRESHHOLD: i32 = 100;
 #[component]
 pub fn Posts() -> impl IntoView {
     let user_data = create_resource(|| (), |_| async move { webworks::get_user_data().await });
@@ -39,11 +41,13 @@ pub fn Posts() -> impl IntoView {
             if let Some(v) = to_load {
                 let s= webworks::load_posts(v).await;
                 if let Ok(posts) = s {
-                    if posts.len() > 0 {
+                    if posts.len() > get_posts.with_untracked(|p| p.len()) {
                         set_posts.set(posts);
+                        set_toload.set(None);
+                    } else {
                         load_posts_cooldown.dispatch(());
+                        set_toload.set(Some(get_toload.with_untracked(|v| v.unwrap() - LOAD_MORE_AMOUNT) as i32));
                     }
-                    set_toload.set(None);
                 } else {
                     let err = s.err().unwrap();
                     error!("{}", err);
@@ -60,12 +64,11 @@ pub fn Posts() -> impl IntoView {
         let window = leptos::window();
         let body = leptos::document().body().unwrap();
         let scrolled_to = window.scroll_y().unwrap() + window.inner_height().unwrap().as_f64().unwrap();
-        let threshold = 100;
-        let is_reach_bottom = body.scroll_height() - threshold <= scrolled_to as i32;
+        let is_reach_bottom = body.scroll_height() - INFINITE_LOAD_THRESHHOLD <= scrolled_to as i32;
 
         if is_reach_bottom && !load_posts_cooldown_pending.get_untracked(){
             if get_toload.get_untracked().is_none() {
-                set_toload.set(Some(get_posts.with_untracked(|v| v.len() + 10) as i32));
+                set_toload.set(Some(get_posts.with_untracked(|v| v.len() + LOAD_MORE_AMOUNT as usize) as i32));
                 load_posts.dispatch(get_toload.get_untracked());
             }
         }
@@ -75,7 +78,7 @@ pub fn Posts() -> impl IntoView {
     onscroll.forget();
 
     leptos::create_effect(move |_|{
-        load_posts.dispatch(Some(5));
+        load_posts.dispatch(Some(LOAD_INITIAL));
     });
 
     let load_posts_value = load_posts.value();
@@ -85,15 +88,6 @@ pub fn Posts() -> impl IntoView {
             match v {
                 None => None,
                 Some(res) => match res {
-                    // Ok(()) => view!{
-                    //     {move|| {
-                    //         get_posts.get().into_iter().map(|p|{
-                    //             view! {
-                    //                 <DisplayPost data=p/>
-                    //             }
-                    //         }).collect::<Vec<_>>()
-                    //     }}
-                    // }.into_view(),
                     Ok(()) => None,
                     Err(_) => Some(view!{<p style="text-align:center;">"Failed to load posts!"</p>}.into_view())
                 }
@@ -111,7 +105,18 @@ pub fn Posts() -> impl IntoView {
             >
             {move || {
                 user_data.get()
-                    .map(|user_data| view! { <PostForm user_data=user_data/> })
+                    .map(|user_data| view! { 
+                        <PostForm 
+                            user_data=user_data
+                            on_posted=move|_|{
+                                set_toload.set(get_posts.with_untracked(|v|{
+                                    Some((v.len() + 1) as i32)
+                                }));
+                                load_posts.dispatch(get_toload.get_untracked());
+                                //load_posts.dispatch(Some(get_toload.get_untracked().unwrap_or(LOAD_INITIAL) + 1));
+                            }
+                        /> 
+                    })
             }}
             </Suspense>
 
@@ -133,7 +138,7 @@ pub fn Posts() -> impl IntoView {
 }
 
 #[component]
-fn PostForm(user_data: Option<UserData>) -> impl IntoView {
+fn PostForm(user_data: Option<UserData>, #[prop(into)] on_posted: leptos::Callback<()>) -> impl IntoView {
     let (get, set) = create_signal(user_data);
 
     let post_action = create_action(|post_data: &PostCreationData|{
@@ -149,9 +154,12 @@ fn PostForm(user_data: Option<UserData>) -> impl IntoView {
             match out {
                 None => None::<leptos::View>.into_view(),
                 Some(res) => match res {
-                    Ok(_) => view!{
-                        <p style="text-align:center;">"Uploaded!"</p>
-                    }.into_view(),
+                    Ok(_) => {
+                        on_posted.call(());
+                        view!{
+                            <p style="text-align:center;">"Uploaded!"</p>
+                        }.into_view()
+                    },
                     Err(err) => {
                         leptos::logging::error!("{:?}", err);
                         match err {
