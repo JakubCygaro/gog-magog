@@ -25,6 +25,7 @@ use objects::{UserCreationData, UserDataResponse, UserLogin};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DbErr, EntityTrait, QueryFilter, TransactionTrait,
 };
+use serde::Deserialize;
 use std::{error::Error, str::FromStr, sync::Mutex};
 use uuid::Uuid;
 use validator::Validate;
@@ -33,68 +34,46 @@ type ServiceResult = Result<HttpResponse, ServiceError>;
 
 static SESSION_ID: &str = "id";
 
-#[actix_web::get("/profile/name/{login}")]
-async fn user_profile_name(
-    login: web::Path<String>,
-    db: web::Data<DbConnection>,
-) -> Result<HttpResponse, ServiceError> {
-    let login = login.into_inner();
-    let usr = LoginData::find_by_id(&login).one(&db.db_connection).await?;
-
-    let Some(usr) = usr else {
-        return Ok(HttpResponse::NotFound()
-            .reason("user does not exist")
-            .finish());
-    };
-
-    let data = UserData::find_by_id(usr.user_id)
-        .one(&db.db_connection)
-        .await?
-        .unwrap();
-
-    let resp = UserDataResponse {
-        created: data.created,
-        description: data.description.unwrap_or_default(),
-        login: login,
-        gender: data.gender,
-        id: data.user_id,
-    };
-
-    let json = serde_json::to_string(&resp).or_else(|e| {
-        error!("user_profile_name serialization error: {:?}", e);
-        Err(ServiceError::ServerError {
-            source: Box::new(e),
-        })
-    })?;
-
-    Ok(HttpResponse::Found()
-        .append_header(header::ContentType::json())
-        .body(json))
+#[derive(Deserialize, Clone, Debug)]
+struct UserProfileQuery {
+    username: Option<String>,
+    user_id: Option<Uuid>
 }
 
-#[actix_web::get("/profile/id/{id}")]
-async fn user_profile_id(id: web::Path<Uuid>, db: web::Data<DbConnection>) -> ServiceResult {
-    // let id = Uuid::from_str(&id)
-    //     .or_else(|e| {
-    //         Err(ServiceError::UserNotFound)
-    //     })?;
-    let id = id.into_inner();
-    let Some(user) = LoginData::find()
-        .filter(login_data::Column::UserId.eq(id))
-        .one(&db.db_connection)
-        .await?
-    else {
-        return Err(ServiceError::UserNotFound);
+#[actix_web::get("profile")]
+async fn user_profile(
+    query: web::Query<UserProfileQuery>,
+    db: web::Data<DbConnection>,
+) -> Result<HttpResponse, ServiceError> {
+    let query = query.into_inner();
+
+    let user = match (query.user_id, query.username) {
+        (Some(id), None) => {
+            LoginData::find()
+                .filter(login_data::Column::UserId.eq(id))
+                .one(&db.db_connection)
+                .await?
+        },
+        (_, Some(login)) => {
+            LoginData::find_by_id(login)
+                .one(&db.db_connection)
+                .await?
+        }
+        _ => None
     };
 
-    let data = UserData::find_by_id(id).one(&db.db_connection).await?;
+    let Some(login_data) = user else {
+        return Err(ServiceError::UserNotFound)
+    };
+
+    let data = UserData::find_by_id(login_data.user_id).one(&db.db_connection).await?;
 
     match data {
         Some(model) => {
             let resp = UserDataResponse {
                 created: model.created,
                 description: model.description.unwrap_or_default(),
-                login: user.login,
+                login: login_data.login,
                 gender: model.gender,
                 id: model.user_id,
             };
@@ -111,6 +90,85 @@ async fn user_profile_id(id: web::Path<Uuid>, db: web::Data<DbConnection>) -> Se
         None => Err(ServiceError::UserNotFound),
     }
 }
+
+// #[actix_web::get("/profile/name/{login}")]
+// async fn user_profile_name(
+//     login: web::Path<String>,
+//     db: web::Data<DbConnection>,
+// ) -> Result<HttpResponse, ServiceError> {
+//     let login = login.into_inner();
+//     let usr = LoginData::find_by_id(&login).one(&db.db_connection).await?;
+
+//     let Some(usr) = usr else {
+//         return Ok(HttpResponse::NotFound()
+//             .reason("user does not exist")
+//             .finish());
+//     };
+
+//     let data = UserData::find_by_id(usr.user_id)
+//         .one(&db.db_connection)
+//         .await?
+//         .unwrap();
+
+//     let resp = UserDataResponse {
+//         created: data.created,
+//         description: data.description.unwrap_or_default(),
+//         login: login,
+//         gender: data.gender,
+//         id: data.user_id,
+//     };
+
+//     let json = serde_json::to_string(&resp).or_else(|e| {
+//         error!("user_profile_name serialization error: {:?}", e);
+//         Err(ServiceError::ServerError {
+//             source: Box::new(e),
+//         })
+//     })?;
+
+//     Ok(HttpResponse::Found()
+//         .append_header(header::ContentType::json())
+//         .body(json))
+// }
+
+// #[actix_web::get("/profile/id/{id}")]
+// async fn user_profile_id(id: web::Path<Uuid>, db: web::Data<DbConnection>) -> ServiceResult {
+//     // let id = Uuid::from_str(&id)
+//     //     .or_else(|e| {
+//     //         Err(ServiceError::UserNotFound)
+//     //     })?;
+//     let id = id.into_inner();
+//     let Some(user) = LoginData::find()
+//         .filter(login_data::Column::UserId.eq(id))
+//         .one(&db.db_connection)
+//         .await?
+//     else {
+//         return Err(ServiceError::UserNotFound);
+//     };
+
+//     let data = UserData::find_by_id(id).one(&db.db_connection).await?;
+
+//     match data {
+//         Some(model) => {
+//             let resp = UserDataResponse {
+//                 created: model.created,
+//                 description: model.description.unwrap_or_default(),
+//                 login: user.login,
+//                 gender: model.gender,
+//                 id: model.user_id,
+//             };
+//             let json = serde_json::to_string(&resp).or_else(|e| {
+//                 error!("user_profile_id serialization error {:?}", e);
+//                 Err(ServiceError::ServerError {
+//                     source: Box::new(e),
+//                 })
+//             })?;
+//             Ok(HttpResponse::Found()
+//                 .append_header(header::ContentType::json())
+//                 .body(json))
+//         }
+//         None => Err(ServiceError::UserNotFound),
+//     }
+// }
 
 #[actix_web::get("/")]
 async fn hello_world() -> impl Responder {

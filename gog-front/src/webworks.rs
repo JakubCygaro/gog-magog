@@ -16,6 +16,7 @@ macro_rules! js_closure {
     };
 }
 
+pub type WebworksResult<T> = Result<T, WebworksError>;
 const URL_BASE: &str = "http://localhost:8081/";
 
 pub async fn get_token(data: &LoginData) -> Result<(), LoginError> {
@@ -213,5 +214,25 @@ pub async fn create_post(data: PostCreationData) -> Result<(), CreatePostError> 
         400 => Err(CreatePostError::ValidationError(resp.json::<ValidationErrorBody>().await.map_err(|e| WebworksError::Other { source: Box::new(e) })?)),
         _ => Err(CreatePostError::NotLoggedIn)
     }
+}
+
+pub async fn get_user_profile(query: super::data::UserProfileQuery) -> WebworksResult<UserData> {
+
+    let req_str = format!("{}{}{}{}", URL_BASE, "user/profile?",
+        query.name.map_or("".to_owned(), |n| {
+            format!("username={}", n)
+        }),
+        query.id.map_or("".to_owned(), |id| {
+            format!("user_id={}", id)
+        })
+    );
+
+    let response = Request::get(&req_str)
+        .send()
+        .await.map_err(|e| WebworksError::Other { source: Box::new(e) })?;
+    let data = response.json::<UserData>().await
+        .map_err(|e| WebworksError::Other { source: Box::new(e) })?;
+
+    Ok(data)
 }
 

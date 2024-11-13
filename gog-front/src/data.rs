@@ -1,6 +1,6 @@
 use chrono::{DateTime, NaiveTime};
 use serde::Serialize;
-
+use leptos_router::Params;
 #[derive(Clone, Serialize)]
 pub struct LoginData {
     pub login: String,
@@ -36,4 +36,10 @@ pub struct  PostData {
 #[derive(Clone, serde::Deserialize, Serialize, Debug)]
 pub struct PostCreationData {
     pub content: String
+}
+
+#[derive(leptos::Params, PartialEq, Clone)]
+pub struct UserProfileQuery {
+    pub name: Option<String>,
+    pub id: Option<uuid::Uuid>
 }

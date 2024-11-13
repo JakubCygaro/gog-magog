@@ -230,15 +230,16 @@ fn PostForm(user_data: Option<UserData>, #[prop(into)] on_posted: leptos::Callba
 
 #[component]
 fn DisplayPost(data: PostData) -> impl IntoView {
-    let (get_data, set_data) = create_signal(data);
+    let (get_data, _set_data) = create_signal(data);
     view! {
         <div class="flex-container posts-section">
             <div class="flex-column">
-                <p
-                    style="padding:0;margin:0;text-align:center;"
-                >
-                {move||{get_data.get().login}}
-                </p>
+                <a 
+                    href=move||{format!("users?name={}", get_data.get().login)}
+                    class="user-profile-link"
+                >{
+                    move||{get_data.get().login}
+                }</a>
                 <img 
                     src=move|| { webworks::get_pfp_url_for_login(get_data.get().login.as_str())}
                     height="100"
@@ -255,14 +256,12 @@ fn DisplayPost(data: PostData) -> impl IntoView {
                     }
                 </p>
             </div>
-            // <div class="flex-column">
-                <textarea type="text" wrap="hard" rows="5"
-                        class="post-textbox"
-                        prop:value=move||{get_data.get().content}
-                        maxlength="300"
-                        readonly
-                />
-            // </div>
+            <textarea type="text" wrap="hard" rows="5"
+                    class="post-textbox"
+                    prop:value=move||{get_data.get().content}
+                    maxlength="300"
+                    readonly
+            />
         </div>
     }
 }

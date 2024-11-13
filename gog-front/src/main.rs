@@ -9,15 +9,23 @@ pub(crate) mod data;
 use data::UserData;
 use errors::{LoginError, PfpUploadError, RegisterError, UpdateUserError};
 use leptos::leptos_dom::logging::{self, console_error};
-use leptos::{component, create_action, create_node_ref, event_target, event_target_value, expect_context, prelude::*, provide_context, spawn_local, with, CollectView, IntoView, NodeRef};
+use leptos::{component, create_resource, create_action, create_node_ref, event_target, event_target_value, expect_context, prelude::*, provide_context, spawn_local, with, CollectView, IntoView, NodeRef};
 use leptos::view;
-use leptos_router::{use_navigate, NavigateOptions, Route, Router, Routes};
+use leptos_router::Params;
+use leptos_router::{use_navigate, use_query, NavigateOptions, Route, Router, Routes};
 use leptos::logging::*;
 fn main() {
     console_error_panic_hook::set_once();
     leptos::mount_to_body(|| view! { <App/> })
 }
 
+
+#[component]
+fn NotFound()  -> impl IntoView {
+    view!{
+        <h1 style="text-align: center;">"Not Found"</h1>
+    }
+}
 
 #[component]
 fn App() -> impl IntoView {
@@ -36,13 +44,10 @@ fn App() -> impl IntoView {
                             <Route path="/login" view=LoginForm/>
                             <Route path="/user" view=UserScreen/>
                             <Route path="/user/edit" view=EditUser/>
+                            <Route path="/users" view=DisplayOtherUser/>
                             <Route path="/register" view=RegisterForm></Route>
                             <Route path="/posts" view=posts::Posts /> 
-                            <Route path="*any" view=move ||{
-                                view!{
-                                    <h1 style="text-align: center;">"Not Found"</h1>
-                                }
-                            }/>
+                            <Route path="*any" view=NotFound/>
                     </Routes>
                 </div>
             </main>
@@ -568,4 +573,66 @@ fn DisplayUser(user_data: Option<data::UserData>) -> impl IntoView {
         </div>
     }.into_view()
 
+}
+
+#[component]
+fn DisplayOtherUser() -> impl IntoView {
+    use data::UserProfileQuery;
+    let query = use_query::<UserProfileQuery>();
+
+    if query.with(|q| q.is_err()){
+        return view!{<NotFound/>};
+    }
+
+    let (get_un, _) = create_signal(query.with(|q|q.clone().unwrap()));
+
+    let user_data = create_resource(move|| get_un.get(), 
+    |ud| async move { 
+            let res = webworks::get_user_profile(ud).await;
+            res.ok()
+        });
+    let display = move|data: UserData| {
+        view!{
+            <div>
+            <table style="width:100%;table-layout:fixed;">
+                <tr>
+                    <td style="border: 1px dotted white; padding:10px;">
+                        <h1>{data.login.clone()}</h1>
+                        <p>"Joined: " {
+                            format!("{}", data.created.unwrap_or_default().format("%Y-%m-%d"))
+                        }</p>
+                        <p>"Gender: " {data.gender}</p>
+                        <p>"Description: " {data.description}</p>
+                    </td>
+                    <td style="text-align: right">
+                        <div>
+                        <img src={webworks::get_pfp_url_for_login(&data.login)} 
+                            alt="User profile picture"
+                            style="width:200px;height:200px;"/>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+            </div>
+        }
+    };
+
+    use leptos::Suspense;
+    view!{
+        <Suspense
+            fallback=move||{view!{}}
+        >
+            {move|| {
+                match user_data.get() {
+                    Some(ud) => match ud {
+                        Some(ud) => display(ud).into_view(),
+                        None => view!{<NotFound/>}
+                    },
+                    None => view!{ 
+                        <p>"Could not load user profile"</p>
+                    }.into_view()
+                }
+            }}
+        </Suspense>
+    }
 }

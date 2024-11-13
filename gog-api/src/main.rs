@@ -37,8 +37,9 @@ fn configure_services(cfg: &mut web::ServiceConfig) {
                 .route(web::post().to(resources::user_upload_pfp)),
         )
         .service(service::user_get_pfp)
-        .service(service::user_profile_name)
-        .service(service::user_profile_id);
+        // .service(service::user_profile_name)
+        // .service(service::user_profile_id)
+        .service(service::user_profile);
     cfg.service(user_scope);
     let posts_scope = web::scope("/posts")
         .service(service::posts::posts_create)

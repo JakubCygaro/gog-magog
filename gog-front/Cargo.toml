@@ -18,6 +18,7 @@ chrono = { version = "0.4.38", features = ["serde"] }
 wasm-bindgen-futures = "0.4.43"
 tokio = { version = "1.40.0", features = ["sync"]}
 gloo-timers = { version = "0.3.0", features = ["futures"]}
+uuid = "1.11.0"
 
 [dependencies.web-sys]
 version = "0.3"

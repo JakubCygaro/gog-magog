@@ -100,3 +100,17 @@ textarea {
     margin-top: 5%;
     margin-bottom: 5%;
 }
+
+.user-profile-link {
+    padding: 0;
+    margin: 0;
+    text-align: center;
+    color: inherit;
+    text-decoration: none;
+}
+.user-profile-link a:visited {
+    color: inherit;
+}
+.user-profile-link a {
+    text-decoration: inherit;
+}
