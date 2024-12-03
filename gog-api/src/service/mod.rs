@@ -37,7 +37,7 @@ static SESSION_ID: &str = "id";
 #[derive(Deserialize, Clone, Debug)]
 struct UserProfileQuery {
     username: Option<String>,
-    user_id: Option<Uuid>
+    user_id: Option<Uuid>,
 }
 
 #[actix_web::get("profile")]
@@ -53,20 +53,18 @@ async fn user_profile(
                 .filter(login_data::Column::UserId.eq(id))
                 .one(&db.db_connection)
                 .await?
-        },
-        (_, Some(login)) => {
-            LoginData::find_by_id(login)
-                .one(&db.db_connection)
-                .await?
         }
-        _ => None
+        (_, Some(login)) => LoginData::find_by_id(login).one(&db.db_connection).await?,
+        _ => None,
     };
 
     let Some(login_data) = user else {
-        return Err(ServiceError::UserNotFound)
+        return Err(ServiceError::UserNotFound);
     };
 
-    let data = UserData::find_by_id(login_data.user_id).one(&db.db_connection).await?;
+    let data = UserData::find_by_id(login_data.user_id)
+        .one(&db.db_connection)
+        .await?;
 
     match data {
         Some(model) => {

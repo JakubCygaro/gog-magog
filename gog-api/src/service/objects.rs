@@ -69,9 +69,9 @@ mod validation {
     use validator::ValidationError;
 
     pub fn validate_user_login(login: &str) -> Result<(), ValidationError> {
-        if !login.is_ascii() {
+        if !login.is_ascii() || login.contains(char::is_whitespace) {
             Err(ValidationError::new("2137")
-                .with_message("username contains non-ascii characters".into()))
+                .with_message("username contains whitespace or non-ascii characters".into()))
         } else {
             Ok(())
         }

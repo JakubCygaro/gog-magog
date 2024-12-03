@@ -39,15 +39,18 @@ pub fn Posts() -> impl IntoView {
         let to_load = to_load.to_owned();
         async move {
             if let Some(v) = to_load {
-                let s= webworks::load_posts(v).await;
+                let s = webworks::load_posts(v).await;
                 if let Ok(posts) = s {
-                    if posts.len() > get_posts.with_untracked(|p| p.len()) {
+                    if posts.is_empty() && get_posts.with_untracked(|p| p.is_empty()) {
+                        return Ok(())
+                    } else if posts.len() > get_posts.with_untracked(|p| p.len()) {
                         set_posts.set(posts);
                         set_toload.set(None);
                     } else {
                         load_posts_cooldown.dispatch(());
-                        set_toload.set(Some(get_toload.with_untracked(|v| v.unwrap() - LOAD_MORE_AMOUNT) as i32));
+                        set_toload.set(Some(get_toload.with_untracked(|v| v.unwrap() - LOAD_MORE_AMOUNT)));
                     }
+                    return Ok(())
                 } else {
                     let err = s.err().unwrap();
                     error!("{}", err);
@@ -66,11 +69,9 @@ pub fn Posts() -> impl IntoView {
         let scrolled_to = window.scroll_y().unwrap() + window.inner_height().unwrap().as_f64().unwrap();
         let is_reach_bottom = body.scroll_height() - INFINITE_LOAD_THRESHHOLD <= scrolled_to as i32;
 
-        if is_reach_bottom && !load_posts_cooldown_pending.get_untracked(){
-            if get_toload.get_untracked().is_none() {
+        if is_reach_bottom && !load_posts_cooldown_pending.get_untracked() && get_toload.get_untracked().is_none(){
                 set_toload.set(Some(get_posts.with_untracked(|v| v.len() + LOAD_MORE_AMOUNT as usize) as i32));
                 load_posts.dispatch(get_toload.get_untracked());
-            }
         }
     });
 
