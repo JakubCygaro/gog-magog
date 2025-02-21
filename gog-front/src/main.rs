@@ -15,7 +15,7 @@ use leptos_router::Params;
 use leptos_router::{use_navigate, use_query, NavigateOptions, Route, Router, Routes};
 use leptos::logging::*;
 
-use self::posts::PostsFrontPage;
+use self::posts::{PostsFrontPage, UserPosts};
 use self::webworks::PostsFilter;
 fn main() {
     console_error_panic_hook::set_once();
@@ -64,6 +64,7 @@ fn App() -> impl IntoView {
                                 }
                             }/>
                             <Route path="/users" view=DisplayOtherUser/>
+                            <Route path="/test" view=UserPosts/>
                             <Route path="/register" view=RegisterForm></Route>
                             <Route path="/posts" view=PostsFrontPage /> 
                             <Route path="*any" view=NotFound/>
