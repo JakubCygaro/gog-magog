@@ -18,7 +18,11 @@ use crate::{
     session::TokenSession,
 };
 
-use super::{helpers, objects::PostCreationData, DbConnection, ServiceResult};
+use super::{
+    helpers,
+    objects::{PostCreationData, PostsFilter},
+    DbConnection, ServiceResult,
+};
 use std::sync::Mutex;
 
 #[actix_web::post("create")]
@@ -46,6 +50,41 @@ async fn posts_create(
 
     posts::Entity::insert(model).exec(&db.db_connection).await?;
     Ok(HttpResponse::Created().finish())
+}
+
+#[actix_web::post("filter")]
+async fn posts_filter(db: Data<DbConnection>, filter: Json<PostsFilter>) -> super::ServiceResult {
+    let filter = filter.into_inner();
+    let mut posts = super::entity::posts::Entity::find().find_also_related(login_data::Entity);
+
+    if let Some(un) = filter.username {
+        posts = posts.filter(login_data::Column::Login.eq(un));
+    }
+    posts = posts.limit(filter.limit.unwrap_or(20));
+    let posts = posts
+        .order_by_desc(posts::Column::Posted)
+        .limit(filter.limit)
+        .all(&db.db_connection)
+        .await?;
+
+    // let body = serde_json::to_string(&posts)
+    //     .or_else(|e| Err(super::ServiceError::ServerError{source:Box::new(e)}))?;
+
+    Ok(HttpResponse::Found().json(
+        posts
+            .into_iter()
+            .map(|e| PostResponse {
+                login: match e.1 {
+                    Some(m) => m.login,
+                    None => String::new(),
+                },
+                content: e.0.content,
+                post_id: e.0.post_id,
+                user_id: e.0.post_id,
+                posted: e.0.posted,
+            })
+            .collect::<Vec<_>>(),
+    ))
 }
 
 #[actix_web::get("newest/{amount}")]

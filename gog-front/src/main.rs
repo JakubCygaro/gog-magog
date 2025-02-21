@@ -14,6 +14,9 @@ use leptos::view;
 use leptos_router::Params;
 use leptos_router::{use_navigate, use_query, NavigateOptions, Route, Router, Routes};
 use leptos::logging::*;
+
+use self::posts::PostsFrontPage;
+use self::webworks::PostsFilter;
 fn main() {
     console_error_panic_hook::set_once();
     leptos::mount_to_body(|| view! { <App/> })
@@ -44,9 +47,25 @@ fn App() -> impl IntoView {
                             <Route path="/login" view=LoginForm/>
                             <Route path="/user" view=UserScreen/>
                             <Route path="/user/edit" view=EditUser/>
+                            <Route path="/user/posts" view=move|| {
+                                let user_data = expect_context::<RwSignal<Option<UserData>>>().get_untracked();
+                                let Some(user_data) = user_data else {
+                                    return view! {
+
+                                    }.into_view()
+                                };
+                                let filter = PostsFilter {
+                                    username: Some(user_data.login),
+                                    limit: None
+                                };
+                                view! {
+                                    <posts::Posts
+                                        post_filter=Some(filter)/>
+                                }
+                            }/>
                             <Route path="/users" view=DisplayOtherUser/>
                             <Route path="/register" view=RegisterForm></Route>
-                            <Route path="/posts" view=posts::Posts /> 
+                            <Route path="/posts" view=PostsFrontPage /> 
                             <Route path="*any" view=NotFound/>
                     </Routes>
                 </div>
@@ -560,6 +579,16 @@ fn DisplayUser(user_data: Option<data::UserData>) -> impl IntoView {
                 });
             }>
             "Edit profile"
+        </button>
+        <button
+            on:click=move|_| {
+                let nav = use_navigate();
+                nav("user/posts", NavigateOptions {
+                    resolve: true,
+                    ..Default::default()
+                });
+            }>
+            "Your posts"
         </button>
         <button
             on:click=move|_| {

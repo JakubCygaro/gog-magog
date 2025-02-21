@@ -92,3 +92,8 @@ pub struct PostCreationData {
     #[validate(length(min = 1, max = 300, message = "post content of disallowed size"))]
     pub(super) content: String,
 }
+#[derive(Deserialize, Debug, Clone)]
+pub struct PostsFilter {
+    pub username: Option<String>,
+    pub limit: Option<u64>,
+}

@@ -45,6 +45,7 @@ fn configure_services(cfg: &mut web::ServiceConfig) {
         .service(service::posts::posts_create)
         .service(service::posts::posts_newest)
         .service(service::posts::posts_user)
+        .service(service::posts::posts_filter)
         .service(service::posts::posts_id);
     cfg.service(posts_scope);
 }

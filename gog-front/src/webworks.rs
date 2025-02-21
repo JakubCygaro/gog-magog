@@ -19,6 +19,11 @@ macro_rules! js_closure {
 pub type WebworksResult<T> = Result<T, WebworksError>;
 const URL_BASE: &str = "http://localhost:8081/";
 
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct PostsFilter {
+    pub username: Option<String>,
+    pub limit: Option<u64>
+}
 pub async fn get_token(data: &LoginData) -> Result<(), LoginError> {
 
     let body = serde_json::to_string(data).map_err(|e| WebworksError::Other { source: Box::new(e) })?;
@@ -195,10 +200,18 @@ pub async fn upload_new_pfp(file: web_sys::File) -> mpsc::Receiver<Result<(), Pf
     reciever
 }
 
-pub async fn load_posts(amount: i32) -> Result<Vec<PostData>, WebworksError> {
-    let resp = Request::get(&format!("{}posts/newest/{}", URL_BASE, amount))
-        .send().await?;
-    let text = resp.text().await?;
+pub async fn load_posts(amount: i32, filter: &Option<PostsFilter>) -> Result<Vec<PostData>, WebworksError> {
+    let mut text;
+    if let Some(filter) = filter {
+        let resp = Request::post(&format!("{}posts/filter", URL_BASE));
+        let resp = resp.json(filter).unwrap();
+        let resp = resp.send().await?;
+        text = resp.text().await?;
+    } else {
+        let resp = Request::get(&format!("{}posts/newest/{}", URL_BASE, amount));
+        let resp = resp.send().await?;
+        text = resp.text().await?;
+    }
     let json = serde_json::from_str::<Vec<PostData>>(&text).unwrap();
     Ok(json)
 }

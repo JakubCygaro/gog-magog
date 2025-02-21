@@ -1,4 +1,4 @@
-use leptos::{create_action, document, Callable};
+use leptos::{create_action, document,  Callable, Effect};
 use leptos::{component, IntoView, view, prelude::*, expect_context, create_resource, Suspense, Show, NodeRef, create_node_ref};
 use web_sys::wasm_bindgen::{self, JsCast};
 use web_sys::{js_sys, HtmlBodyElement};
@@ -13,16 +13,65 @@ macro_rules! js_closure {
     };
 }
 
-const LOAD_MORE_AMOUNT: i32 = 10;
-const LOAD_INITIAL:     i32 = 5;
+pub const LOAD_MORE_AMOUNT: i32 = 10;
+pub const LOAD_INITIAL:     i32 = 5;
 const INFINITE_LOAD_THRESHHOLD: i32 = 100;
 #[component]
-pub fn Posts() -> impl IntoView {
+pub fn PostsFrontPage() -> impl IntoView {
+     
     let user_data = create_resource(|| (), |_| async move { webworks::get_user_data().await });
+    let (get_refresh, set_refresh) = create_signal::<Option<()>>(None);
+    view!{
+        <div>
+            <Suspense
+                fallback=move|| view!{ <p>"Cannot create a post while not logged in"</p>}
+            >
+            {move || {
+                user_data.get()
+                    .map(|user_data| view! { 
+                        <PostForm 
+                            user_data=user_data
+                            on_posted=move|_|{
+                                set_refresh.set(Some(()));
+                                //set_toload.set(get_posts.with_untracked(|v|{
+                                //    Some((v.len() + 1) as i32)
+                                //}));
+                                //load_posts.dispatch(get_toload.get_untracked());
+                                //load_posts.dispatch(Some(get_toload.get_untracked().unwrap_or(LOAD_INITIAL) + 1));
+                            }
+                        /> 
+                    })
+            }}
+            </Suspense>
 
+            <h1 style="text-align:center;"> "Newest posts:"</h1><br/>
+
+            <Posts 
+                refresh=Some(get_refresh)
+                post_filter=None/>
+        </div>
+    }
+}
+// make this be only an infinite scroll enabled posts displaying component
+// add parameters for load_more, load_initial so that it is more flexible
+// make it use optional filters with webworks::get_posts using posts/filter instead of posts/newest
+// or some shit
+// 
+#[component]
+pub fn Posts(
+    #[prop(default = LOAD_MORE_AMOUNT)]
+    load_more: i32, 
+    #[prop(default = LOAD_INITIAL)]
+    load_initial: i32, 
+    #[prop(default = None)]
+    refresh: Option<ReadSignal<Option<()>>>,
+    #[prop(default = None)]
+    post_filter: Option<webworks::PostsFilter>) 
+    -> impl IntoView {
+    //loaded posts cache
     let (get_posts, set_posts) = 
         create_signal::<Vec<PostData>>(vec![]);
-
+    //how many posts should be loaded (None if none new posts should be downloaded)
     let (get_toload, set_toload) = create_signal(None);
 
     let load_posts_cooldown = create_action(move|_:&()|{
@@ -34,12 +83,15 @@ pub fn Posts() -> impl IntoView {
     });
 
     let load_posts_cooldown_pending = load_posts_cooldown.pending();
-
+    
+    //this action downloads posts based on the to_load signal, it loads no posts if to_load is set
+    //to None
     let load_posts = create_action(move |to_load: &Option<i32>| {
         let to_load = to_load.to_owned();
+        let filter = post_filter.to_owned();
         async move {
             if let Some(v) = to_load {
-                let s = webworks::load_posts(v).await;
+                let s = webworks::load_posts(v, &filter).await;
                 if let Ok(posts) = s {
                     if posts.is_empty() && get_posts.with_untracked(|p| p.is_empty()) {
                         return Ok(())
@@ -48,7 +100,7 @@ pub fn Posts() -> impl IntoView {
                         set_toload.set(None);
                     } else {
                         load_posts_cooldown.dispatch(());
-                        set_toload.set(Some(get_toload.with_untracked(|v| v.unwrap() - LOAD_MORE_AMOUNT)));
+                        set_toload.set(Some(get_toload.with_untracked(|v| v.unwrap_or(load_more) - load_more)));
                     }
                     return Ok(())
                 } else {
@@ -70,7 +122,7 @@ pub fn Posts() -> impl IntoView {
         let is_reach_bottom = body.scroll_height() - INFINITE_LOAD_THRESHHOLD <= scrolled_to as i32;
 
         if is_reach_bottom && !load_posts_cooldown_pending.get_untracked() && get_toload.get_untracked().is_none(){
-                set_toload.set(Some(get_posts.with_untracked(|v| v.len() + LOAD_MORE_AMOUNT as usize) as i32));
+                set_toload.set(Some(get_posts.with_untracked(|v| v.len() + load_more as usize) as i32));
                 load_posts.dispatch(get_toload.get_untracked());
         }
     });
@@ -79,7 +131,7 @@ pub fn Posts() -> impl IntoView {
     onscroll.forget();
 
     leptos::create_effect(move |_|{
-        load_posts.dispatch(Some(LOAD_INITIAL));
+        load_posts.dispatch(Some(load_initial));
     });
 
     let load_posts_value = load_posts.value();
@@ -95,33 +147,25 @@ pub fn Posts() -> impl IntoView {
             }
         }) 
     };
+    if let Some(refresh) = refresh {
+        let _refresh_fn = Effect::new(move |_| {
+            if refresh.get().is_none() {
+                return;
+            };
+            log!("refresh requested!");
+            set_toload.set(get_posts.with_untracked(|v|{
+                Some((v.len()) as i32)
+            }));
+            //load_posts.dispatch(get_toload.get_untracked());
+            load_posts.dispatch(Some(get_toload.get_untracked().unwrap_or(load_initial) + 1));
+        });
+    }
     view!{
         <div
             on:load=move|_|{
                 leptos::logging::log!("div_on_load");
                 load_posts.dispatch(Some(10));
             }>
-            <Suspense
-                fallback=move|| view!{ <p>"Cannot create a post while not logged in"</p>}
-            >
-            {move || {
-                user_data.get()
-                    .map(|user_data| view! { 
-                        <PostForm 
-                            user_data=user_data
-                            on_posted=move|_|{
-                                set_toload.set(get_posts.with_untracked(|v|{
-                                    Some((v.len() + 1) as i32)
-                                }));
-                                load_posts.dispatch(get_toload.get_untracked());
-                                //load_posts.dispatch(Some(get_toload.get_untracked().unwrap_or(LOAD_INITIAL) + 1));
-                            }
-                        /> 
-                    })
-            }}
-            </Suspense>
-
-            <h1 style="text-align:center;">"Newest posts:"</h1><br/>
 
             {display_posts}
             {
