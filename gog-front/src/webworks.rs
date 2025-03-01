@@ -200,7 +200,7 @@ pub async fn upload_new_pfp(file: web_sys::File) -> mpsc::Receiver<Result<(), Pf
     reciever
 }
 
-pub async fn load_posts(amount: i32, filter: &Option<PostsFilter>) -> Result<Vec<PostData>, WebworksError> {
+pub async fn load_posts(amount: i32, filter: Option<&PostsFilter>) -> Result<Vec<PostData>, WebworksError> {
     let mut text;
     if let Some(filter) = filter {
         let resp = Request::post(&format!("{}posts/filter", URL_BASE));

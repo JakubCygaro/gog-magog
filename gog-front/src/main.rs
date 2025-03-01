@@ -47,22 +47,7 @@ fn App() -> impl IntoView {
                             <Route path="/login" view=LoginForm/>
                             <Route path="/user" view=UserScreen/>
                             <Route path="/user/edit" view=EditUser/>
-                            <Route path="/user/posts" view=move|| {
-                                let user_data = expect_context::<RwSignal<Option<UserData>>>().get_untracked();
-                                let Some(user_data) = user_data else {
-                                    return view! {
-
-                                    }.into_view()
-                                };
-                                let filter = PostsFilter {
-                                    username: Some(user_data.login),
-                                    limit: None
-                                };
-                                view! {
-                                    <posts::Posts
-                                        post_filter=Some(filter)/>
-                                }
-                            }/>
+                            <Route path="/user/posts" view=UserPosts/>
                             <Route path="/users" view=DisplayOtherUser/>
                             <Route path="/test" view=UserPosts/>
                             <Route path="/register" view=RegisterForm></Route>
