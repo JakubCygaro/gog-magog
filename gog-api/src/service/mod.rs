@@ -1,3 +1,4 @@
+pub mod comments;
 mod helpers;
 mod objects;
 pub mod posts;
@@ -33,7 +34,28 @@ use validator::Validate;
 type ServiceResult = Result<HttpResponse, ServiceError>;
 
 static SESSION_ID: &str = "id";
-
+pub fn configure_service(cfg: &mut web::ServiceConfig) {
+    use actix_web::guard;
+    cfg.service(hello_world);
+    let user_scope = web::scope("/user")
+        .service(user_create)
+        .service(user_exists)
+        .service(user_login_token)
+        .service(user_data)
+        .service(user_update)
+        .service(user_logout)
+        .service(
+            web::resource("/upload_pfp")
+                .guard(guard::Header("content-type", "image/jpg"))
+                .guard(guard::Post())
+                .route(web::post().to(resources::user_upload_pfp)),
+        )
+        .service(user_get_pfp)
+        // .service(user_profile_name)
+        // .service(user_profile_id)
+        .service(user_profile);
+    cfg.service(user_scope);
+}
 #[derive(Deserialize, Clone, Debug)]
 struct UserProfileQuery {
     username: Option<String>,

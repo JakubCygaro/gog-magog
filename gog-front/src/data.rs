@@ -43,3 +43,7 @@ pub struct UserProfileQuery {
     pub name: Option<String>,
     pub id: Option<uuid::Uuid>
 }
+#[derive(leptos::Params, PartialEq, Clone)]
+pub struct PostQuery {
+    pub id: Option<uuid::Uuid>
+}

@@ -20,34 +20,9 @@ use service::DbConnection;
 use session::TokenSession;
 
 fn configure_services(cfg: &mut web::ServiceConfig) {
-    use service::resources;
-    cfg.service(service::hello_world);
-
-    let user_scope = web::scope("/user")
-        .service(service::user_create)
-        .service(service::user_exists)
-        .service(service::user_login_token)
-        .service(service::user_data)
-        .service(service::user_update)
-        .service(service::user_logout)
-        .service(
-            web::resource("/upload_pfp")
-                .guard(guard::Header("content-type", "image/jpg"))
-                .guard(guard::Post())
-                .route(web::post().to(resources::user_upload_pfp)),
-        )
-        .service(service::user_get_pfp)
-        // .service(service::user_profile_name)
-        // .service(service::user_profile_id)
-        .service(service::user_profile);
-    cfg.service(user_scope);
-    let posts_scope = web::scope("/posts")
-        .service(service::posts::posts_create)
-        .service(service::posts::posts_newest)
-        .service(service::posts::posts_user)
-        .service(service::posts::posts_filter)
-        .service(service::posts::posts_id);
-    cfg.service(posts_scope);
+    service::configure_service(cfg);
+    service::posts::configure_service(cfg);
+    service::comments::configure_service(cfg);
 }
 
 async fn setup_database(

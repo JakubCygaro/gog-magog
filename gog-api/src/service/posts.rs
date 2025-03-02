@@ -6,14 +6,14 @@ use actix_web::{
 };
 use sea_orm::{
     entity, ActiveModelBehavior, ActiveValue, ColumnTrait, EntityOrSelect, EntityTrait,
-    QueryFilter, QueryOrder, QuerySelect,
+    QueryFilter, QueryOrder, QuerySelect, Related,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    entity::{login_data, posts},
+    entity::{comments, login_data, posts},
     errors::ServiceError,
     session::TokenSession,
 };
@@ -24,7 +24,16 @@ use super::{
     DbConnection, ServiceResult,
 };
 use std::sync::Mutex;
-
+pub fn configure_service(cfg: &mut web::ServiceConfig) {
+    let posts_scope = web::scope("/posts")
+        .service(posts_create)
+        .service(posts_newest)
+        .service(posts_user)
+        .service(posts_filter)
+        .service(posts_id)
+        .service(posts_comments);
+    cfg.service(posts_scope);
+}
 #[actix_web::post("create")]
 async fn posts_create(
     post_data: Json<PostCreationData>,
@@ -175,4 +184,27 @@ async fn posts_id(post_id: web::Path<Uuid>, db: Data<DbConnection>) -> super::Se
         Some(p) => Ok(HttpResponse::Found().json(p)),
         None => Ok(HttpResponse::NotFound().finish()),
     }
+}
+#[derive(Deserialize)]
+pub struct PostCommentsQuery {
+    pid: Uuid,
+    amount: u64,
+}
+#[actix_web::get("comments")]
+pub async fn posts_comments(
+    query: web::Query<PostCommentsQuery>,
+    db: web::Data<DbConnection>,
+) -> ServiceResult {
+    let query = query.into_inner();
+    let pid = query.pid;
+    let comments = comments::Entity::find()
+        .filter(comments::Column::PostId.eq(pid))
+        .order_by_desc(comments::Column::Posted)
+        .limit(query.amount)
+        .all(&db.db_connection)
+        .await?;
+    //.iter()
+    //.map(|comment_model| comment_model.comment_id)
+    //.collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(comments))
 }

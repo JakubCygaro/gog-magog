@@ -1,11 +1,18 @@
 #![allow(clippy::pedantic)]
-
+#[macro_use]
+pub(crate) mod macros {
+    macro_rules! js_closure {
+        ($body:expr) => {
+            leptos::wasm_bindgen::closure::Closure::wrap(Box::new($body) as Box<dyn FnMut(_)>)
+        };
+    }
+}
 mod webworks;
 mod errors;
 mod posts;
-
+mod comments;
+pub(crate) mod loader;
 pub(crate) mod data;
-
 use data::UserData;
 use errors::{LoginError, PfpUploadError, RegisterError, UpdateUserError};
 use leptos::leptos_dom::logging::{self, console_error};
@@ -52,6 +59,7 @@ fn App() -> impl IntoView {
                             <Route path="/test" view=UserPosts/>
                             <Route path="/register" view=RegisterForm></Route>
                             <Route path="/posts" view=PostsFrontPage /> 
+                            <Route path="/post" view=posts::Post /> 
                             <Route path="*any" view=NotFound/>
                     </Routes>
                 </div>

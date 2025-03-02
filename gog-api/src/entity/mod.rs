@@ -2,6 +2,7 @@
 
 pub mod prelude;
 
+pub mod comments;
 pub mod login_data;
 pub mod posts;
 pub mod user_data;

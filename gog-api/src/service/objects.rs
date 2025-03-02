@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use uuid::Uuid;
 use validator::Validate;
 
 use crate::entity::user_data;
@@ -96,4 +97,10 @@ pub struct PostCreationData {
 pub struct PostsFilter {
     pub username: Option<String>,
     pub limit: Option<u64>,
+}
+#[derive(Clone, serde::Deserialize, Validate, Debug)]
+pub struct CommentCreationData {
+    #[validate(length(min = 1, max = 300, message = "comment content of disallowed size"))]
+    pub(super) content: String,
+    pub(super) post_id: Uuid,
 }

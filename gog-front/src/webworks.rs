@@ -10,11 +10,6 @@ use super::data::*;
 use super::errors::*;
 use leptos::{web_sys, wasm_bindgen};
 
-macro_rules! js_closure {
-    ($body:expr) => {
-        Closure::wrap(Box::new($body) as Box<dyn FnMut(_)>)
-    };
-}
 
 pub type WebworksResult<T> = Result<T, WebworksError>;
 const URL_BASE: &str = "http://localhost:8081/";
@@ -213,6 +208,13 @@ pub async fn load_posts(amount: i32, filter: Option<&PostsFilter>) -> Result<Vec
         text = resp.text().await?;
     }
     let json = serde_json::from_str::<Vec<PostData>>(&text).unwrap();
+    Ok(json)
+}
+pub async fn get_post(pid: &uuid::Uuid) -> Result<PostData, WebworksError> {
+    let resp = Request::get(&format!("{}posts/id/{}", URL_BASE, pid));
+    let resp = resp.send().await?;
+    let text = resp.text().await?;
+    let json = serde_json::from_str::<PostData>(&text).unwrap();
     Ok(json)
 }
 
