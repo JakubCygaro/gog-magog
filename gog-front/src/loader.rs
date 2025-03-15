@@ -92,7 +92,7 @@ where
         let scrolled_to = window.scroll_y().unwrap() + window.inner_height().unwrap().as_f64().unwrap();
         let is_reach_bottom = body.scroll_height() - INFINITE_LOAD_THRESHHOLD <= scrolled_to as i32;
 
-        if is_reach_bottom && !load_posts_cooldown_pending.get_untracked() && get_toload.get_untracked().is_none(){
+        if is_reach_bottom && !load_posts_cooldown_pending.get() && get_toload.get().is_none(){
                 set_toload.set(Some(get_posts.with_untracked(|v| v.len() + load_more as usize) as i32));
                 load_posts.dispatch(get_toload.get_untracked());
         }

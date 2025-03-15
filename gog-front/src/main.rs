@@ -11,6 +11,7 @@ mod webworks;
 mod errors;
 mod posts;
 mod comments;
+pub(crate) mod util;
 pub(crate) mod loader;
 pub(crate) mod data;
 use data::UserData;

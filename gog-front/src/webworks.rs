@@ -210,10 +210,11 @@ pub async fn load_posts(amount: i32, filter: Option<&PostsFilter>) -> Result<Vec
     let json = serde_json::from_str::<Vec<PostData>>(&text).unwrap();
     Ok(json)
 }
-pub async fn get_post(pid: &uuid::Uuid) -> Result<PostData, WebworksError> {
+pub async fn get_post(pid: uuid::Uuid) -> Result<PostData, WebworksError> {
     let resp = Request::get(&format!("{}posts/id/{}", URL_BASE, pid));
     let resp = resp.send().await?;
     let text = resp.text().await?;
+    leptos::logging::debug_warn!("{}", text);
     let json = serde_json::from_str::<PostData>(&text).unwrap();
     Ok(json)
 }

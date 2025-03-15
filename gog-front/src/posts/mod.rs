@@ -1,12 +1,13 @@
 use super::loader::*;
 use leptos_router::{use_navigate, use_query, NavigateOptions, Route, Router, Routes};
+use std::future::{self, pending};
 use std::pin::Pin;
 use std::str::FromStr;
 
 use leptos::html::Output;
 use leptos::svg::filter;
-use leptos::{create_action, document,  Callable, Effect};
-use leptos::{component, IntoView, Await, view, prelude::*, expect_context, create_resource, Suspense, Show, NodeRef, create_node_ref, For};
+use leptos::{create_action, document,  Callable, Effect, Serializable};
+use leptos::{component, IntoView, Await, Suspense, ErrorBoundary, view, prelude::*, expect_context, create_resource, Show, NodeRef, create_node_ref, For};
 use web_sys::wasm_bindgen::{self, JsCast};
 use web_sys::{js_sys, HtmlBodyElement};
 use crate::errors::{self, CreatePostError, WebworksError};
@@ -223,7 +224,7 @@ fn DisplayPost(data: PostData) -> impl IntoView {
                     on:click=move|ev|{
                         ev.prevent_default();
                         let nav = leptos_router::use_navigate();
-                        let post = format!("/post?={}", get_data.get_untracked().post_id);
+                        let post = format!("/post?id={}", get_data.get().post_id);
                         nav(&post, NavigateOptions::default());
                     }>
                     "Comments"
@@ -243,13 +244,39 @@ fn DisplayPost(data: PostData) -> impl IntoView {
 #[component]
 pub fn Post() -> impl IntoView {
 
+    use crate::util::AwaitWithError;
     let query = use_query::<PostQuery>();
 
     if query.with(|q| q.is_err()){
         return view!{<super::NotFound/>};
     }
-    let data = leptos::create_local_resource(move || (), move || webworks::get_post(query.get_untracked().unwrap().id));
+    let err_handler=move|err: &WebworksError| {
+        leptos::logging::error!("{}",err);
+        view!{
+            <p>"An error has occured"</p>
+        }.into_view()
+    };
     view! {
-            <DisplayPost data=data/>
+        <AwaitWithError
+            future=move||{
+                let id = query.get_untracked().unwrap().id.expect("expected pid in query");
+                webworks::get_post(id)
+            }
+            pending=move||view!{
+                <p>"Loading Post"</p>
+            }.into_view()
+            ok_handler=move|ok| {
+                let post_data = ok.clone();
+                view!{
+                    <DisplayPost
+                        data=post_data
+                        />
+                }.into_view()
+            }
+            err_handler=err_handler
+        >
+        </AwaitWithError>
     }
 }
+
+

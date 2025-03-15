@@ -175,11 +175,29 @@ async fn posts_user(
     Ok(HttpResponse::Found().json(posts))
 }
 
+#[derive(Clone, serde::Deserialize, Serialize, Debug, Default)]
+pub struct PostData {
+    pub login: String,
+    pub post_id: String,
+    pub user_id: String,
+    pub posted: chrono::naive::NaiveDateTime,
+    pub content: String,
+}
 #[actix_web::get("id/{post_id}")]
 async fn posts_id(post_id: web::Path<Uuid>, db: Data<DbConnection>) -> super::ServiceResult {
     let post = posts::Entity::find_by_id(post_id.into_inner())
+        .find_also_related(login_data::Entity)
         .one(&db.db_connection)
-        .await?;
+        .await?
+        .map_or(None, |(p, l)| {
+            Some(PostData {
+                login: l.map_or("".to_owned(), |m| m.login),
+                post_id: p.post_id.to_string(),
+                user_id: p.user_id.to_string(),
+                posted: p.posted,
+                content: p.content,
+            })
+        });
     match post {
         Some(p) => Ok(HttpResponse::Found().json(p)),
         None => Ok(HttpResponse::NotFound().finish()),
