@@ -5,7 +5,10 @@ use super::TokenSession;
 use actix_session::Session;
 use actix_web::{web, HttpResponse};
 use chrono::{NaiveDateTime, Utc};
+use sea_orm::ColumnTrait;
 use sea_orm::EntityTrait;
+use sea_orm::QueryFilter;
+use sea_orm::QuerySelect;
 use serde::Deserialize;
 use std::sync::Mutex;
 use uuid::Uuid;
@@ -46,19 +49,37 @@ pub async fn comments_post(
 }
 #[derive(Deserialize)]
 pub struct CommentsGetQuery {
-    cid: Uuid,
+    cid: Option<Uuid>,
+    pid: Option<Uuid>,
+    limit: Option<u64>,
 }
 #[actix_web::get("")]
 pub async fn comments_get(
     query: web::Query<CommentsGetQuery>,
     db: web::Data<DbConnection>,
 ) -> ServiceResult {
-    let cid = query.into_inner().cid;
-    let com = comments::Entity::find_by_id(cid)
-        .one(&db.db_connection)
-        .await?;
-    match com {
-        None => Ok(HttpResponse::NotFound().finish()),
-        Some(c) => Ok(HttpResponse::Found().json(c)),
+    let query = query.into_inner();
+    let pid = query.pid;
+    let cid = query.cid;
+    let limit = query.limit;
+    match (pid, cid) {
+        (None, None) | (Some(_), Some(_)) => Ok(HttpResponse::BadRequest().finish()),
+        (None, Some(cid)) => {
+            let com = comments::Entity::find_by_id(cid)
+                .one(&db.db_connection)
+                .await?;
+            match com {
+                None => Ok(HttpResponse::NotFound().finish()),
+                Some(c) => Ok(HttpResponse::Found().json(c)),
+            }
+        }
+        (Some(pid), None) => {
+            let com = comments::Entity::find()
+                .filter(comments::Column::PostId.eq(pid))
+                .limit(limit)
+                .all(&db.db_connection)
+                .await?;
+            Ok(HttpResponse::Found().json(&com))
+        }
     }
 }

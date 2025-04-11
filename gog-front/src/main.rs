@@ -10,7 +10,7 @@ pub(crate) mod macros {
 mod webworks;
 mod errors;
 mod posts;
-mod comments;
+pub(crate) mod comments;
 pub(crate) mod util;
 pub(crate) mod loader;
 pub(crate) mod data;
@@ -59,8 +59,8 @@ fn App() -> impl IntoView {
                             <Route path="/users" view=DisplayOtherUser/>
                             <Route path="/test" view=UserPosts/>
                             <Route path="/register" view=RegisterForm></Route>
-                            <Route path="/posts" view=PostsFrontPage /> 
-                            <Route path="/post" view=posts::Post /> 
+                            <Route path="/posts" view=PostsFrontPage />
+                            <Route path="/post" view=posts::Post />
                             <Route path="*any" view=NotFound/>
                     </Routes>
                 </div>
@@ -114,7 +114,7 @@ fn RegisterForm() -> impl IntoView {
             return;
         }
 
-        register_action.dispatch(data::UserCreationData{ 
+        register_action.dispatch(data::UserCreationData{
             login,
             password,
         });
@@ -174,7 +174,7 @@ fn RegisterForm() -> impl IntoView {
     };
 
     let valid = move || {
-        with!(move |password, rep_password| 
+        with!(move |password, rep_password|
             if password.eq(rep_password) && !password.is_empty() {
                 view!{
                     <span style="color: green;">"✔"</span>
@@ -193,21 +193,21 @@ fn RegisterForm() -> impl IntoView {
             <Form method="GET" action="" class="formcenter"
                 on:submit=on_submit>
                 <label for="reg-login">"Login:"</label><br/>
-                <input type="text" id="reg-login" 
+                <input type="text" id="reg-login"
                     on:input=move |ev| {
                         set_login.set(event_target_value(&ev));
                     }
                     />
                 <br/>
                 <label for="reg-password">"Password:"</label><br/>
-                <input type="password" id="reg-password" 
+                <input type="password" id="reg-password"
                     on:input=move |ev| {
-                       set_password.set(event_target_value(&ev)); 
+                       set_password.set(event_target_value(&ev));
                     }/>
                 {valid}
                 <br/>
                 <label for="reg-rep-password">"Repeat password:"</label><br/>
-                <input type="password" id="reg-rep-password" 
+                <input type="password" id="reg-rep-password"
                     on:input=move |ev| {
                         set_rep_password.set(event_target_value(&ev));
                     }/>
@@ -395,7 +395,7 @@ fn EditUser() -> impl IntoView {
                         view! {
                             <p>"An unknown error has occured"</p>
                         }.into_view()
-                    }    
+                    }
                 },
                 _ => view!{<p/>}.into_view()
             }
@@ -416,7 +416,7 @@ fn EditUser() -> impl IntoView {
 
     let update_pfp_action = create_action(|file: &web_sys::File| {
         let input = file.clone();
-        async move { 
+        async move {
             let mut rec = webworks::upload_new_pfp(input).await;
             rec.recv().await
         }
@@ -441,7 +441,7 @@ fn EditUser() -> impl IntoView {
                         },
                         PfpUploadError::Websys { js_value } => {
                             let v = js_value.as_string().unwrap_or_default();
-                            console_error(&v);                            
+                            console_error(&v);
                             view!{<p>"An error has occured"</p>}.into_view()
                         },
                         _ => {
@@ -468,8 +468,8 @@ fn EditUser() -> impl IntoView {
                 <tr>
                     <td>
                         <label for="genderinput">"Gender: "</label>
-                        <input type="text" 
-                            name="gender" 
+                        <input type="text"
+                            name="gender"
                             id="generinput"
                             list="genders"
                             on:input=edit_gender
@@ -487,7 +487,7 @@ fn EditUser() -> impl IntoView {
                     </td>
                     <td>
                         <div style="text-align: center">
-                        <img src={webworks::get_pfp_url_for_login(&data.get().login)} 
+                        <img src={webworks::get_pfp_url_for_login(&data.get().login)}
                             alt="User profile picture"
                             style="width:200px;height:200px;"
                             />
@@ -497,8 +497,8 @@ fn EditUser() -> impl IntoView {
                             "Choose a new profile picture"
                         </label>
                         <br/>
-                        <input type="file" 
-                            name="pfp-file" 
+                        <input type="file"
+                            name="pfp-file"
                             id="pfp"
                             accept="image/jpeg"
                             on:change=on_input_image
@@ -540,7 +540,7 @@ fn DisplayUser(user_data: Option<data::UserData>) -> impl IntoView {
         }.into_view()
     };
     let logout_action = create_action(|_: &()| {
-        async move { webworks::logout_user().await }        
+        async move { webworks::logout_user().await }
     });
     let data = expect_context::<RwSignal<Option<UserData>>>();
     data.set(Some(user_data.clone()));
@@ -558,7 +558,7 @@ fn DisplayUser(user_data: Option<data::UserData>) -> impl IntoView {
                 </td>
                 <td style="text-align: right">
                     <div>
-                    <img src={webworks::get_pfp_url_for_login(&user_data.login)} 
+                    <img src={webworks::get_pfp_url_for_login(&user_data.login)}
                         alt="User profile picture"
                         style="width:200px;height:200px;"/>
                     </div>
@@ -568,9 +568,9 @@ fn DisplayUser(user_data: Option<data::UserData>) -> impl IntoView {
         <button
             on:click=move|_| {
                 let nav = use_navigate();
-                nav("user/edit", NavigateOptions { 
+                nav("user/edit", NavigateOptions {
                     resolve: true,
-                    ..Default::default() 
+                    ..Default::default()
                 });
             }>
             "Edit profile"
@@ -610,8 +610,8 @@ fn DisplayOtherUser() -> impl IntoView {
 
     let (get_un, _) = create_signal(query.with(|q|q.clone().unwrap()));
 
-    let user_data = create_resource(move|| get_un.get(), 
-    |ud| async move { 
+    let user_data = create_resource(move|| get_un.get(),
+    |ud| async move {
             let res = webworks::get_user_profile(ud).await;
             res.ok()
         });
@@ -630,7 +630,7 @@ fn DisplayOtherUser() -> impl IntoView {
                     </td>
                     <td style="text-align: right">
                         <div>
-                        <img src={webworks::get_pfp_url_for_login(&data.login)} 
+                        <img src={webworks::get_pfp_url_for_login(&data.login)}
                             alt="User profile picture"
                             style="width:200px;height:200px;"/>
                         </div>
@@ -652,7 +652,7 @@ fn DisplayOtherUser() -> impl IntoView {
                         Some(ud) => display(ud).into_view(),
                         None => view!{<NotFound/>}
                     },
-                    None => view!{ 
+                    None => view!{
                         <p>"Could not load user profile"</p>
                     }.into_view()
                 }

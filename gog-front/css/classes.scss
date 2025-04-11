@@ -6,7 +6,7 @@
         overflow: hidden;
         background-color: #333;
     }
-      
+
     li {
         float: left;
         a {
@@ -24,12 +24,12 @@
             }
         }
     }
-      
-      
+
+
 }
 
 .formcenter {
-    margin: 0 auto; 
+    margin: 0 auto;
     width:250px;
     border-color: white;
     border-style: dashed;
@@ -88,10 +88,8 @@ textarea {
     background-color: #333;
 }
 
-
-
 .posts-section {
-    margin: 0 auto; 
+    margin: 0 auto;
     border-color: white;
     border-style: dashed;
     border-width: 1px;
@@ -101,6 +99,16 @@ textarea {
     margin-bottom: 5%;
 }
 
+.comment-section {
+    margin: 0 auto;
+    border-color: white;
+    border-style: dashed;
+    border-width: 1px;
+    border-radius: 5px;
+    padding: 10px;
+    margin-top: 5%;
+    margin-bottom: 5%;
+}
 .user-profile-link {
     padding: 0;
     margin: 0;

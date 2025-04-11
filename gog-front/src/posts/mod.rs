@@ -25,7 +25,6 @@ impl HasKey for PostData {
 
 #[component]
 pub fn PostsFrontPage() -> impl IntoView {
-     
     let user_data = create_resource(|| (), |_| async move { webworks::get_user_data().await });
     let (get_refresh, set_refresh) = create_signal::<Option<()>>(None);
     let dis = move |post: PostData| {
@@ -40,8 +39,8 @@ pub fn PostsFrontPage() -> impl IntoView {
             >
             {move || {
                 user_data.get()
-                    .map(|user_data| view! { 
-                        <PostForm 
+                    .map(|user_data| view! {
+                        <PostForm
                             user_data=user_data
                             on_posted=move|_|{
                                 set_refresh.set(Some(()));
@@ -51,19 +50,19 @@ pub fn PostsFrontPage() -> impl IntoView {
                                 //load_posts.dispatch(get_toload.get_untracked());
                                 //load_posts.dispatch(Some(get_toload.get_untracked().unwrap_or(LOAD_INITIAL) + 1));
                             }
-                        /> 
+                        />
                     })
             }}
             </Suspense>
 
             <h1 style="text-align:center;"> "Newest posts:"</h1><br/>
 
-            //<Posts 
+            //<Posts
             //    refresh=Some(get_refresh)
             //    post_filter=None/>
-            <InfiniteLoad 
+            <InfiniteLoad
                 display=dis
-                loader=front_posts_loader 
+                loader=front_posts_loader
                 extra_data={}
                 />
         </div>
@@ -90,9 +89,9 @@ pub fn UserPosts() -> impl IntoView {
     };
     view!{
         <h1 style="text-align:center;"> "Your posts:"</h1><br/>
-        <InfiniteLoad 
+        <InfiniteLoad
             display=dis
-            loader=user_posts_loader 
+            loader=user_posts_loader
             extra_data={filter}
             />
     }.into_view()
@@ -154,7 +153,7 @@ fn PostForm(user_data: Option<UserData>, #[prop(into)] on_posted: leptos::Callba
     };
 
     view!{
-        <Show 
+        <Show
         when=move||{get.get().is_some()}
         fallback=|| view!{ <p style="text-align:center;">"You have to be logged in to post"</p> }>
 
@@ -165,7 +164,7 @@ fn PostForm(user_data: Option<UserData>, #[prop(into)] on_posted: leptos::Callba
                     >
                     {move||{get.get().unwrap().login}}
                     </p>
-                    <img 
+                    <img
                         src=move|| { webworks::get_pfp_url_for_login(&get.get().unwrap().login)}
                         height="100"
                         width="100"
@@ -177,7 +176,7 @@ fn PostForm(user_data: Option<UserData>, #[prop(into)] on_posted: leptos::Callba
                         type="button">
                         "Post"
                     </button>
-                    
+
                 </div>
                 <textarea type="text" wrap="hard" rows="5"
                             class="post-textbox"
@@ -194,18 +193,18 @@ fn PostForm(user_data: Option<UserData>, #[prop(into)] on_posted: leptos::Callba
 }
 
 #[component]
-fn DisplayPost(data: PostData) -> impl IntoView {
+fn DisplayPost(data: PostData, #[prop(default = false)] comment_button: bool) -> impl IntoView {
     let (get_data, _set_data) = create_signal(data);
     view! {
         <div class="flex-container posts-section">
             <div class="flex-column">
-                <a 
+                <a
                     href=move||{format!("users?name={}", get_data.get().login)}
                     class="user-profile-link"
                 >{
                     move||{get_data.get().login}
                 }</a>
-                <img 
+                <img
                     src=move|| { webworks::get_pfp_url_for_login(get_data.get().login.as_str())}
                     height="100"
                     width="100"
@@ -220,15 +219,19 @@ fn DisplayPost(data: PostData) -> impl IntoView {
                         }
                     }
                 </p>
-                <button
-                    on:click=move|ev|{
-                        ev.prevent_default();
-                        let nav = leptos_router::use_navigate();
-                        let post = format!("/post?id={}", get_data.get().post_id);
-                        nav(&post, NavigateOptions::default());
-                    }>
-                    "Comments"
-                </button>
+                {
+                    comment_button.then(||view!{
+                        <button
+                            on:click=move|ev|{
+                                ev.prevent_default();
+                                let nav = leptos_router::use_navigate();
+                                let post = format!("/post?id={}", get_data.get().post_id);
+                                nav(&post, NavigateOptions::default());
+                            }>
+                            "Comments"
+                        </button>
+                    })
+                }
             </div>
             <textarea type="text" wrap="hard" rows="5"
                     class="post-textbox"
@@ -256,6 +259,12 @@ pub fn Post() -> impl IntoView {
             <p>"An error has occured"</p>
         }.into_view()
     };
+    let comment_display = |cdata: CommentData| {
+        view!{
+            <crate::comments::DisplayComment data=cdata/>
+        }.into_view()
+    };
+    let pid = query.get_untracked().unwrap().id.expect("expected pid in query");
     view! {
         <AwaitWithError
             future=move||{
@@ -270,7 +279,14 @@ pub fn Post() -> impl IntoView {
                 view!{
                     <DisplayPost
                         data=post_data
-                        />
+                        comment_button=false
+                    />
+                    <crate::comments::CommentForm/>
+                    <InfiniteLoad
+                        display=comment_display
+                        loader=comments_loader
+                        extra_data={pid}
+                    />
                 }.into_view()
             }
             err_handler=err_handler
@@ -278,5 +294,7 @@ pub fn Post() -> impl IntoView {
         </AwaitWithError>
     }
 }
-
+async fn comments_loader(pid: uuid::Uuid, toload: i32) -> Result<Vec<CommentData>, WebworksError> {
+    webworks::load_comments(pid, toload).await
+}
 

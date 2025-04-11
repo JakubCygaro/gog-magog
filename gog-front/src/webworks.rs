@@ -1,4 +1,5 @@
-
+use uuid::Uuid;
+use chrono::format::format;
 use chrono::DateTime;
 use leptos::leptos_dom::logging::console_log;
 use leptos::logging::log;
@@ -66,7 +67,7 @@ pub async fn register(user_creation: &UserCreationData) -> Result<(), RegisterEr
         },
         Err(e) => Err(WebworksError::Other { source: Box::new(e) })?,
     }
-        
+
 }
 
 pub async fn get_user_data() -> Option<UserData> {
@@ -86,7 +87,7 @@ pub async fn get_user_data() -> Option<UserData> {
         Ok(d) => Some(d),
         Err(_) => None
     }
-        
+
 }
 
 pub async fn update_user_data(data: &UserData) -> Result<(), UpdateUserError> {
@@ -127,7 +128,7 @@ pub fn get_pfp_url_for_login(login: &str) -> String {
 
 pub async fn upload_new_pfp(file: web_sys::File) -> mpsc::Receiver<Result<(), PfpUploadError>> {
     use wasm_bindgen::prelude::*;
-    
+
     use web_sys::{Request, RequestInit, Response};
 
     let (sender, reciever) = mpsc::channel::<Result<(), PfpUploadError>>(1);
@@ -180,7 +181,7 @@ pub async fn upload_new_pfp(file: web_sys::File) -> mpsc::Receiver<Result<(), Pf
 
         let _ = window.fetch_with_request(&request)
             .then2(&resolve, &failure);
-    
+
     });
 
     let error = js_closure!( move |e: web_sys::Event| {
@@ -189,7 +190,7 @@ pub async fn upload_new_pfp(file: web_sys::File) -> mpsc::Receiver<Result<(), Pf
 
     reader.add_event_listener_with_callback("load", load.as_ref().unchecked_ref()).unwrap();
     reader.add_event_listener_with_callback("error", error.as_ref().unchecked_ref()).unwrap();
-    
+
     load.forget(); error.forget();
 
     reciever
@@ -252,3 +253,13 @@ pub async fn get_user_profile(query: super::data::UserProfileQuery) -> WebworksR
     Ok(data)
 }
 
+pub async fn load_comments(pid: Uuid, limit: i32) -> Result<Vec<CommentData>, WebworksError> {
+    let query_str = format!("{}{}pid={}&limit={}", URL_BASE, "comments?", pid.to_string(), limit);
+    leptos::logging::log!("query_str: {}", query_str);
+    let response = Request::get(&query_str)
+        .send()
+        .await?;
+    let text = response.text().await?;
+    let json = serde_json::from_str::<Vec<CommentData>>(&text).expect("expected comment data list response json from api");
+    Ok(json)
+}
