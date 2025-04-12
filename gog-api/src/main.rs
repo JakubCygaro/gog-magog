@@ -13,7 +13,7 @@ use clap::Parser;
 use std::sync::Mutex;
 
 use actix_session::{storage::CookieSessionStore, SessionMiddleware};
-use actix_web::{self, cookie::Key, dev::Server, guard, middleware::Logger, web, App, HttpServer};
+use actix_web::{self, cookie::Key, dev::Server, middleware::Logger, web, App, HttpServer};
 use log::{log, Level};
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbBackend, DbErr, Statement};
 use service::DbConnection;

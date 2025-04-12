@@ -19,12 +19,10 @@ use errors::{LoginError, PfpUploadError, RegisterError, UpdateUserError};
 use leptos::leptos_dom::logging::{self, console_error};
 use leptos::{component, create_resource, create_action, create_node_ref, event_target, event_target_value, expect_context, prelude::*, provide_context, spawn_local, with, CollectView, IntoView, NodeRef};
 use leptos::view;
-use leptos_router::Params;
 use leptos_router::{use_navigate, use_query, NavigateOptions, Route, Router, Routes};
 use leptos::logging::*;
 
 use self::posts::{PostsFrontPage, UserPosts};
-use self::webworks::PostsFilter;
 fn main() {
     console_error_panic_hook::set_once();
     leptos::mount_to_body(|| view! { <App/> })

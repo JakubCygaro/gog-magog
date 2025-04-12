@@ -30,7 +30,6 @@ use objects::UserUpdateDataExt;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DbErr, EntityTrait, QueryFilter, TransactionTrait,
 };
-use serde::Deserialize;
 use std::{error::Error, str::FromStr, sync::Mutex};
 use uuid::Uuid;
 use validator::Validate;

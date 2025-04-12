@@ -1,8 +1,4 @@
 use uuid::Uuid;
-use chrono::format::format;
-use chrono::DateTime;
-use leptos::leptos_dom::logging::console_log;
-use leptos::logging::log;
 use tokio::sync::mpsc;
 use anyhow::{Result, anyhow};
 use gloo_net::http::Request;
@@ -197,7 +193,7 @@ pub async fn upload_new_pfp(file: web_sys::File) -> mpsc::Receiver<Result<(), Pf
 }
 
 pub async fn load_posts(amount: i32, filter: Option<&PostsFilter>) -> Result<Vec<PostData>, WebworksError> {
-    let mut text;
+    let text;
     if let Some(filter) = filter {
         let resp = Request::post(&format!("{}posts/filter", URL_BASE));
         let resp = resp.json(filter).unwrap();
