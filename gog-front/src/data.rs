@@ -62,6 +62,6 @@ pub struct PostQuery {
 //}
 impl HasKey for CommentData {
     fn key(&self) -> uuid::Uuid {
-        self.comment_id.parse().expect("failed to parse string as uuid for CommentData::key()")
+        self.comment_id
     }
 }

@@ -262,6 +262,7 @@ pub async fn load_comments(pid: Uuid, limit: i32) -> Result<Vec<CommentData>, We
 pub async fn leave_comment(ccdata: CommentCreationData) -> Result<(), WebworksError> {
     let request_str = format!("{}{}", URL_BASE, "comments/post");
     Request::post(&request_str)
+        .credentials(leptos::web_sys::RequestCredentials::Include)
         .json(&ccdata)?
         .send()
         .await?;

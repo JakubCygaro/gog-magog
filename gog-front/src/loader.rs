@@ -13,15 +13,15 @@ pub trait HasKey {
 #[component]
 pub fn InfiniteLoad<T, S, L, D, IV, E, F>(
     #[prop(default = LOAD_MORE_AMOUNT)]
-    load_more: i32, 
+    load_more: i32,
     #[prop(default = LOAD_INITIAL)]
-    load_initial: i32, 
-    #[prop(default = None)]
+    load_initial: i32,
+    #[prop(optional)]
     refresh: Option<ReadSignal<Option<()>>>,
     extra_data: S,
-    loader: L, 
-    display: D) 
-    -> impl IntoView 
+    loader: L,
+    display: D)
+    -> impl IntoView
 where
     T: Sized + Clone + HasKey + 'static,
     S: Sized + Clone + 'static,

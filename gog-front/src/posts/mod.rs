@@ -259,6 +259,7 @@ pub fn Post() -> impl IntoView {
         }.into_view()
     };
     let pid = query.get_untracked().unwrap().id.expect("expected pid in query");
+    let (refresh_get, refresh_set) = create_signal::<Option<()>>(None);
     view! {
         <AwaitWithError
             future=move||{
@@ -275,11 +276,14 @@ pub fn Post() -> impl IntoView {
                         data=post_data
                         comment_button=false
                     />
-                    <crate::comments::CommentForm on_posted=move|_|{}/>
+                    <crate::comments::CommentForm post_id=pid on_posted=move|_|{
+                        refresh_set.set(Some(()));
+                    }/>
                     <InfiniteLoad
                         display=comment_display
                         loader=comments_loader
                         extra_data={pid}
+                        refresh=refresh_get
                     />
                 }.into_view()
             }
@@ -289,6 +293,9 @@ pub fn Post() -> impl IntoView {
     }
 }
 async fn comments_loader(pid: uuid::Uuid, toload: i32) -> Result<Vec<CommentData>, WebworksError> {
-    webworks::load_comments(pid, toload).await
+    webworks::load_comments(pid, toload).await.map(|mut comments|{
+        comments.sort_unstable_by_key(|c| c.posted);
+        comments
+    })
 }
 

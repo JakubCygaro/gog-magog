@@ -4,8 +4,8 @@ use actix_web::{
     Either, HttpResponse,
 };
 use sea_orm::{
-    ActiveModelBehavior, ActiveValue, ColumnTrait, EntityTrait,
-    QueryFilter, QueryOrder, QuerySelect, Related,
+    ActiveModelBehavior, ActiveValue, ColumnTrait, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, Related,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

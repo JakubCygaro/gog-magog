@@ -89,10 +89,10 @@ pub mod data_structures {
     }
     #[derive(Clone, serde::Deserialize, serde::Serialize, Debug)]
     pub struct CommentData {
-        pub comment_id: String,
-        pub post_id: String,
-        pub user_id: String,
-        pub posted: chrono::naive::NaiveDateTime,
+        pub comment_id: Uuid,
+        pub post_id: Uuid,
+        pub user_id: Uuid,
+        pub posted: chrono::DateTime<chrono::Local>,
         pub content: String,
     }
 }
