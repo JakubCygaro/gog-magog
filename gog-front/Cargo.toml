@@ -13,13 +13,18 @@ gloo-net = { version = "0.6.0", features = ["http"] }
 serde_json = { version = "1.0.125" }
 serde = { version = "1.0.208", features = ["derive"] }
 anyhow = "1.0.86"
-thiserror = "1.0.63" 
+thiserror = "1.0.63"
 chrono = { version = "0.4.38", features = ["serde"] }
 wasm-bindgen-futures = "0.4.43"
 tokio = { version = "1.40.0", features = ["sync"]}
 gloo-timers = { version = "0.3.0", features = ["futures"]}
-uuid = "1.11.0"
-
+gog_commons = { path = "../gog-commons/" }
 [dependencies.web-sys]
 version = "0.3"
 features = ["File", "FileList"]
+[dependencies.uuid]
+version = "1.10.0"
+features = [
+    "js",
+    "serde"
+]

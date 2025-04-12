@@ -1,10 +1,10 @@
 use super::helpers::*;
-use super::objects::CommentCreationData;
 use super::DbConnection;
 use super::TokenSession;
 use actix_session::Session;
 use actix_web::{web, HttpResponse};
 use chrono::{NaiveDateTime, Utc};
+use gog_commons::data_structures::CommentCreationData;
 use sea_orm::ColumnTrait;
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;

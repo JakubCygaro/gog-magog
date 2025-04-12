@@ -193,7 +193,7 @@ fn PostForm(user_data: Option<UserData>, #[prop(into)] on_posted: leptos::Callba
 }
 
 #[component]
-fn DisplayPost(data: PostData, #[prop(default = false)] comment_button: bool) -> impl IntoView {
+fn DisplayPost(data: PostData, #[prop(default = true)] comment_button: bool) -> impl IntoView {
     let (get_data, _set_data) = create_signal(data);
     view! {
         <div class="flex-container posts-section">
@@ -219,18 +219,19 @@ fn DisplayPost(data: PostData, #[prop(default = false)] comment_button: bool) ->
                         }
                     }
                 </p>
-                {
-                    comment_button.then(||view!{
-                        <button
-                            on:click=move|ev|{
-                                ev.prevent_default();
-                                let nav = leptos_router::use_navigate();
-                                let post = format!("/post?id={}", get_data.get().post_id);
-                                nav(&post, NavigateOptions::default());
-                            }>
-                            "Comments"
-                        </button>
-                    })
+                {move||{
+                           comment_button.then(move||view!{
+                               <button
+                                   on:click=move|ev|{
+                                       ev.prevent_default();
+                                       let nav = leptos_router::use_navigate();
+                                       let post = format!("/post?id={}", get_data.get().post_id);
+                                       nav(&post, NavigateOptions::default());
+                                   }>
+                                   "Comments"
+                               </button>
+                           })
+                       }
                 }
             </div>
             <textarea type="text" wrap="hard" rows="5"
@@ -281,7 +282,7 @@ pub fn Post() -> impl IntoView {
                         data=post_data
                         comment_button=false
                     />
-                    <crate::comments::CommentForm/>
+                    <crate::comments::CommentForm on_posted=move|_|{}/>
                     <InfiniteLoad
                         display=comment_display
                         loader=comments_loader

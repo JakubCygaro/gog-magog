@@ -1,4 +1,4 @@
-use leptos::{component, create_node_ref, NodeRef, view, IntoView};
+use leptos::{component, create_node_ref, view, Callable, IntoView, NodeRef};
 use crate::data::CommentData;
 
 #[component]
@@ -8,8 +8,11 @@ pub fn DisplayComment(data: CommentData) -> impl IntoView {
     }
 }
 #[component]
-pub fn CommentForm() -> impl IntoView {
+pub fn CommentForm(#[prop(into)] on_posted: leptos::Callback<()>) -> impl IntoView {
     let comment_content: NodeRef<leptos::html::Textarea> = create_node_ref();
+    let on_click_leave_comment = move|_ev: _| {
+        on_posted.call(());
+    };
     view!{
         <div class="flex-column comment-section">
             //<div class="flex-column">
@@ -40,7 +43,7 @@ pub fn CommentForm() -> impl IntoView {
                         />
             <button
                 style="padding: 5px; "
-                //on:click=on_click_post
+                on:click=on_click_leave_comment
                 type="button">
                 "Leave comment"
             </button>

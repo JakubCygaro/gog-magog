@@ -18,11 +18,8 @@ use crate::{
     session::TokenSession,
 };
 
-use super::{
-    helpers,
-    objects::{PostCreationData, PostsFilter},
-    DbConnection, ServiceResult,
-};
+use super::{helpers, DbConnection, ServiceResult};
+use gog_commons::data_structures::{PostCreationData, PostsFilter};
 use std::sync::Mutex;
 pub fn configure_service(cfg: &mut web::ServiceConfig) {
     let posts_scope = web::scope("/posts")

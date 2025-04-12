@@ -3,12 +3,11 @@ mod helpers;
 mod objects;
 pub mod posts;
 pub mod resources;
-use crate::{cache::ResourceCache, entity::login_data, errors::ServiceError};
-
 use super::entity;
 use super::entity::prelude::*;
 use super::errors;
 use super::session::TokenSession;
+use crate::{cache::ResourceCache, entity::login_data, errors::ServiceError};
 use actix_session::Session;
 use actix_web::{
     self,
@@ -20,9 +19,14 @@ use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
+use gog_commons as commons;
+use gog_commons::data_structures::UserCreationData;
+use gog_commons::data_structures::UserDataResponse;
+use gog_commons::data_structures::UserLogin;
 use log::{debug, error, info, log, Level};
 pub use objects::DbConnection;
-use objects::{UserCreationData, UserDataResponse, UserLogin};
+use objects::UserProfileQuery;
+use objects::UserUpdateDataExt;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DbErr, EntityTrait, QueryFilter, TransactionTrait,
 };
@@ -30,7 +34,6 @@ use serde::Deserialize;
 use std::{error::Error, str::FromStr, sync::Mutex};
 use uuid::Uuid;
 use validator::Validate;
-
 type ServiceResult = Result<HttpResponse, ServiceError>;
 
 static SESSION_ID: &str = "id";
@@ -55,11 +58,6 @@ pub fn configure_service(cfg: &mut web::ServiceConfig) {
         // .service(user_profile_id)
         .service(user_profile);
     cfg.service(user_scope);
-}
-#[derive(Deserialize, Clone, Debug)]
-struct UserProfileQuery {
-    username: Option<String>,
-    user_id: Option<Uuid>,
 }
 
 #[actix_web::get("profile")]
@@ -218,13 +216,13 @@ async fn user_logout(
 #[actix_web::post("/update")]
 async fn user_update(
     db: web::Data<DbConnection>,
-    update_data: web::Json<objects::UserUpdateData>,
+    update_data: web::Json<gog_commons::data_structures::UserUpdateData>,
     token_session: web::Data<Mutex<dyn TokenSession>>,
     session: Session,
 ) -> Result<HttpResponse, ServiceError> {
     let update_data = update_data.into_inner();
     if let Err(e) = update_data.validate() {
-        let resp = objects::ValidationErrorResponse {
+        let resp = commons::data_structures::ValidationErrorResponse {
             reason: "Validation Failed".to_owned(),
             errors: e,
         };
@@ -267,7 +265,7 @@ async fn user_create(
     log!(Level::Info, "user data: {:?}", creation_data.0);
     if let Err(e) = creation_data.validate() {
         error!("Validation errors\n {:?}", e.errors());
-        let resp = objects::ValidationErrorResponse {
+        let resp = commons::data_structures::ValidationErrorResponse {
             reason: "Validation Failed".to_owned(),
             errors: e,
         };
