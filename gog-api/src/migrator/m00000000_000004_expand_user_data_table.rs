@@ -11,21 +11,31 @@ impl MigrationName for Migration {
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let table = Table::alter()
-            .table(UserData::Table)
-            .add_column_if_not_exists(ColumnDef::new(UserData::Created).timestamp())
-            .to_owned();
-        manager.alter_table(table).await?;
-        let table = Table::alter()
-            .table(UserData::Table)
-            .add_column_if_not_exists(
-                ColumnDef::new(UserData::Gender)
-                    .text()
-                    .default(Expr::value("not given")),
-            )
-            .to_owned();
-        manager.alter_table(table).await
-        //Ok(())
+        if !manager
+            .has_column(UserData::Table.to_string(), UserData::Created.to_string())
+            .await?
+        {
+            let table = Table::alter()
+                .table(UserData::Table)
+                .add_column_if_not_exists(ColumnDef::new(UserData::Created).timestamp())
+                .to_owned();
+            manager.alter_table(table).await?;
+        };
+        if !manager
+            .has_column(UserData::Table.to_string(), UserData::Gender.to_string())
+            .await?
+        {
+            let table = Table::alter()
+                .table(UserData::Table)
+                .add_column_if_not_exists(
+                    ColumnDef::new(UserData::Gender)
+                        .text()
+                        .default(Expr::value("not given")),
+                )
+                .to_owned();
+            manager.alter_table(table).await?;
+        }
+        Ok(())
     }
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager

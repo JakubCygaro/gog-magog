@@ -42,7 +42,7 @@ impl MigrationTrait for Migration {
                             .to(LoginData::Table, LoginData::UserId)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
-                    .col(ColumnDef::new(UserPfp::Data).blob(BlobSize::Long))
+                    .col(ColumnDef::new(UserPfp::Data).blob())
                     .to_owned(),
             )
             .await

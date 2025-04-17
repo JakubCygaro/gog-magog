@@ -13,7 +13,7 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let table = Table::alter()
             .table(UserData::Table)
-            .add_column_if_not_exists(ColumnDef::new(UserData::Pfp).blob(BlobSize::Medium))
+            .add_column_if_not_exists(ColumnDef::new(UserData::Pfp).blob())
             .to_owned();
         manager.alter_table(table).await
     }
