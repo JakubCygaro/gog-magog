@@ -14,6 +14,7 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
+                    .if_not_exists()
                     .table(Posts::Table)
                     .col(ColumnDef::new(Posts::PostId).uuid().primary_key())
                     .col(ColumnDef::new(Posts::UserId).uuid().not_null())
@@ -24,7 +25,7 @@ impl MigrationTrait for Migration {
                             .to(LoginData::Table, LoginData::UserId)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
-                    .col(ColumnDef::new(Posts::Posted).date_time().not_null())
+                    .col(ColumnDef::new(Posts::Posted).timestamp().not_null())
                     .col(ColumnDef::new(Posts::Content).text().not_null())
                     .to_owned(),
             )

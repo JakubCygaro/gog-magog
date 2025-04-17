@@ -1,4 +1,5 @@
 use super::loader::*;
+use chrono::TimeZone;
 use leptos_router::{use_query, NavigateOptions};
 use std::str::FromStr;
 
@@ -208,7 +209,9 @@ fn DisplayPost(data: PostData, #[prop(default = true)] comment_button: bool) -> 
                 <p style="padding:0;margin:0;text-align:center;">
                     {
                         move||{
-                            get_data.get().posted.format("%Y-%m-%d %H:%M").to_string()
+                            let posted = get_data.get().posted;
+                            let posted = chrono::Local{}.from_utc_datetime(&posted.naive_local());
+                            posted.format("%Y-%m-%d %H:%M").to_string()
                         }
                     }
                 </p>
@@ -244,7 +247,7 @@ pub fn Post() -> impl IntoView {
     use crate::util::AwaitWithError;
     let query = use_query::<PostQuery>();
 
-    if query.with(|q| q.is_err()){
+    if query.with_untracked(|q| q.is_err()){
         return view!{<super::NotFound/>};
     }
     let err_handler=move|err: &WebworksError| {
@@ -293,9 +296,6 @@ pub fn Post() -> impl IntoView {
     }
 }
 async fn comments_loader(pid: uuid::Uuid, toload: i32) -> Result<Vec<CommentData>, WebworksError> {
-    webworks::load_comments(pid, toload).await.map(|mut comments|{
-        comments.sort_unstable_by_key(|c| c.posted);
-        comments
-    })
+    webworks::load_comments(pid, toload).await
 }
 

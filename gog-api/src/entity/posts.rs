@@ -1,3 +1,4 @@
+use chrono::Utc;
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, serde::Serialize)]
@@ -6,7 +7,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub post_id: Uuid,
     pub user_id: Uuid,
-    pub posted: DateTime,
+    pub posted: DateTimeUtc,
     pub content: String,
 }
 

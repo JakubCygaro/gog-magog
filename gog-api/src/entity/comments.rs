@@ -6,7 +6,7 @@ pub struct Model {
     pub comment_id: Uuid,
     pub post_id: Uuid,
     pub user_id: Uuid,
-    pub posted: DateTime,
+    pub posted: DateTimeUtc,
     pub content: String,
 }
 

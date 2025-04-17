@@ -13,7 +13,7 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let table = Table::alter()
             .table(UserData::Table)
-            .add_column_if_not_exists(ColumnDef::new(UserData::Created).date_time())
+            .add_column_if_not_exists(ColumnDef::new(UserData::Created).timestamp())
             .to_owned();
         manager.alter_table(table).await?;
         let table = Table::alter()
@@ -25,6 +25,7 @@ impl MigrationTrait for Migration {
             )
             .to_owned();
         manager.alter_table(table).await
+        //Ok(())
     }
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager

@@ -1,5 +1,8 @@
+use std::borrow::Borrow;
+
+use chrono::TimeZone;
 use gog_commons::data_structures::CommentCreationData;
-use leptos::{component, create_action, create_node_ref, create_signal, view, Callable, IntoView, NodeRef, SignalGet, SignalWith};
+use leptos::{component, create_action, Suspense, create_node_ref, create_local_resource, create_signal, view, Callable, ErrorBoundary, IntoView, NodeRef, SignalGet, SignalWith};
 use crate::webworks;
 use crate::data::CommentData;
 
@@ -9,24 +12,26 @@ pub fn DisplayComment(data: CommentData) -> impl IntoView {
     view!{
         <div class="flex-container comment-section">
             <div class="flex-column">
-                //<a
-                //    href=move||{format!("users?name={}", get_data.get().login)}
-                //    class="user-profile-link"
-                //>{
-                //    move||{get_data.get().login}
-                //}</a>
-                //<img
-                //    src=move|| { webworks::get_pfp_url_for_login(get_data.get().login.as_str())}
-                //    height="100"
-                //    width="100"
-                //    style="padding: 10px;display: block;
-                //                    margin-left: auto;
-                //                    margin-right: auto;"
-                ///>
+                <a
+                    href=move||{format!("users?id={}", get_data.get().user_id)}
+                    class="user-profile-link"
+                >{
+                    move||{get_data.get().user_name}
+                }</a>
+                <img
+                    src=move|| { webworks::get_pfp_url_for_login(get_data.get().user_name.as_str())}
+                    height="100"
+                    width="100"
+                    style="padding: 10px;display: block;
+                                    margin-left: auto;
+                                    margin-right: auto;"
+                />
                 <p style="padding:0;margin:0;text-align:center;">
                     {
                         move||{
-                            get_data.get().posted.format("%Y-%m-%d %H:%M").to_string()
+                            let posted = get_data.get().posted;
+                            let posted = chrono::Local{}.from_utc_datetime(&posted.naive_local());
+                            posted.format("%Y-%m-%d %H:%M").to_string()
                         }
                     }
                 </p>

@@ -3,6 +3,7 @@ use actix_web::{
     web::{self, Data, Json, Query},
     Either, HttpResponse,
 };
+use gog_commons::data_structures::PostData;
 use sea_orm::{
     ActiveModelBehavior, ActiveValue, ColumnTrait, EntityTrait, QueryFilter, QueryOrder,
     QuerySelect, Related,
@@ -49,7 +50,7 @@ async fn posts_create(
     let model = posts::ActiveModel {
         post_id: ActiveValue::Set(Uuid::new_v4()),
         user_id: ActiveValue::Set(id),
-        posted: ActiveValue::Set(chrono::Utc::now().naive_utc()),
+        posted: ActiveValue::Set(chrono::Utc::now()),
         content: ActiveValue::Set(post_data.content.clone()),
     };
 
@@ -129,7 +130,7 @@ struct PostResponse {
     login: String,
     user_id: Uuid,
     post_id: Uuid,
-    posted: chrono::naive::NaiveDateTime,
+    posted: chrono::DateTime<chrono::Utc>,
     content: String,
 }
 
@@ -171,14 +172,6 @@ async fn posts_user(
     Ok(HttpResponse::Found().json(posts))
 }
 
-#[derive(Clone, serde::Deserialize, Serialize, Debug, Default)]
-pub struct PostData {
-    pub login: String,
-    pub post_id: String,
-    pub user_id: String,
-    pub posted: chrono::naive::NaiveDateTime,
-    pub content: String,
-}
 #[actix_web::get("id/{post_id}")]
 async fn posts_id(post_id: web::Path<Uuid>, db: Data<DbConnection>) -> super::ServiceResult {
     let post = posts::Entity::find_by_id(post_id.into_inner())

@@ -15,6 +15,7 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
+                    .if_not_exists()
                     .table(Comments::Table)
                     .col(ColumnDef::new(Comments::CommentId).uuid().primary_key())
                     .col(ColumnDef::new(Comments::PostId).uuid().not_null())
@@ -33,7 +34,7 @@ impl MigrationTrait for Migration {
                             .to(Posts::Table, Posts::PostId)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
-                    .col(ColumnDef::new(Comments::Posted).date_time().not_null())
+                    .col(ColumnDef::new(Comments::Posted).timestamp().not_null())
                     .col(ColumnDef::new(Comments::Content).text().not_null())
                     .to_owned(),
             )

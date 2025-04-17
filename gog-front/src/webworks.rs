@@ -204,6 +204,7 @@ pub async fn load_posts(amount: i32, filter: Option<&PostsFilter>) -> Result<Vec
         let resp = resp.send().await?;
         text = resp.text().await?;
     }
+    leptos::logging::debug_warn!("{}", text);
     let json = serde_json::from_str::<Vec<PostData>>(&text).unwrap();
     Ok(json)
 }
@@ -251,7 +252,7 @@ pub async fn get_user_profile(query: super::data::UserProfileQuery) -> WebworksR
 
 pub async fn load_comments(pid: Uuid, limit: i32) -> Result<Vec<CommentData>, WebworksError> {
     let query_str = format!("{}{}pid={}&limit={}", URL_BASE, "comments?", pid.to_string(), limit);
-    leptos::logging::log!("query_str: {}", query_str);
+    //leptos::logging::log!("query_str: {}", query_str);
     let response = Request::get(&query_str)
         .send()
         .await?;

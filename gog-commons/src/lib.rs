@@ -47,7 +47,7 @@ pub mod data_structures {
         pub login: String,
         pub post_id: String,
         pub user_id: String,
-        pub posted: chrono::naive::NaiveDateTime,
+        pub posted: chrono::DateTime<chrono::Utc>,
         pub content: String,
     }
     #[derive(Clone, serde::Serialize, Debug)]
@@ -92,7 +92,8 @@ pub mod data_structures {
         pub comment_id: Uuid,
         pub post_id: Uuid,
         pub user_id: Uuid,
-        pub posted: chrono::DateTime<chrono::Local>,
+        pub user_name: String,
+        pub posted: chrono::DateTime<chrono::Utc>,
         pub content: String,
     }
 }

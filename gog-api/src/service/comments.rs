@@ -3,10 +3,12 @@ use super::TokenSession;
 use actix_session::Session;
 use actix_web::{web, HttpResponse};
 use chrono::Utc;
+use gog_commons::data_structures;
 use gog_commons::data_structures::CommentCreationData;
 use sea_orm::ColumnTrait;
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;
+use sea_orm::QueryOrder;
 use sea_orm::QuerySelect;
 use serde::Deserialize;
 use std::sync::Mutex;
@@ -14,6 +16,7 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::entity::comments;
+use crate::entity::login_data;
 use crate::service::{helpers, ServiceResult};
 pub fn configure_service(cfg: &mut web::ServiceConfig) {
     let scope = actix_web::web::scope("/comments")
@@ -39,7 +42,7 @@ pub async fn comments_post(
         comment_id: sea_orm::ActiveValue::Set(Uuid::new_v4()),
         post_id: sea_orm::ActiveValue::Set(comment.post_id),
         user_id: sea_orm::ActiveValue::Set(uid),
-        posted: sea_orm::ActiveValue::Set(Utc::now().naive_utc()),
+        posted: sea_orm::ActiveValue::Set(Utc::now()),
     };
     comments::Entity::insert(comment)
         .exec(&db.db_connection)
@@ -65,20 +68,47 @@ pub async fn comments_get(
         (None, None) | (Some(_), Some(_)) => Ok(HttpResponse::BadRequest().finish()),
         (None, Some(cid)) => {
             let com = comments::Entity::find_by_id(cid)
+                .find_also_related(login_data::Entity)
                 .one(&db.db_connection)
                 .await?;
             match com {
                 None => Ok(HttpResponse::NotFound().finish()),
-                Some(c) => Ok(HttpResponse::Found().json(c)),
+                Some((c, usr)) => {
+                    let ret = data_structures::CommentData {
+                        comment_id: c.comment_id,
+                        user_id: c.user_id,
+                        post_id: c.post_id,
+                        user_name: usr.map_or(String::new(), |mdl| mdl.login),
+                        posted: c.posted,
+                        content: c.content,
+                    };
+                    Ok(HttpResponse::Found().json(ret))
+                }
             }
         }
         (Some(pid), None) => {
             let com = comments::Entity::find()
                 .filter(comments::Column::PostId.eq(pid))
+                .order_by_asc(comments::Column::Posted)
+                .find_also_related(login_data::Entity)
                 .limit(limit)
                 .all(&db.db_connection)
                 .await?;
-            Ok(HttpResponse::Found().json(&com))
+            let res = com
+                .into_iter()
+                .map(|(c, usr)| {
+                    let ret = data_structures::CommentData {
+                        comment_id: c.comment_id,
+                        user_id: c.user_id,
+                        post_id: c.post_id,
+                        user_name: usr.map_or(String::new(), |mdl| mdl.login),
+                        posted: c.posted,
+                        content: c.content,
+                    };
+                    ret
+                })
+                .collect::<Vec<_>>();
+            Ok(HttpResponse::Found().json(&res))
         }
     }
 }
