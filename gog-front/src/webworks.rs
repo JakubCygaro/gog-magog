@@ -2,7 +2,6 @@ use uuid::Uuid;
 use tokio::sync::mpsc;
 use anyhow::{Result, anyhow};
 use gloo_net::http::Request;
-use web_sys::wasm_bindgen::JsCast;
 use super::data::*;
 use super::errors::*;
 use leptos::{web_sys, wasm_bindgen};
@@ -11,11 +10,6 @@ use leptos::{web_sys, wasm_bindgen};
 pub type WebworksResult<T> = Result<T, WebworksError>;
 const URL_BASE: &str = "http://localhost:8081/";
 
-#[derive(serde::Serialize, Debug, Clone)]
-pub struct PostsFilter {
-    pub username: Option<String>,
-    pub limit: Option<u64>
-}
 pub async fn get_token(data: &LoginData) -> Result<(), LoginError> {
 
     let body = serde_json::to_string(data).map_err(|e| WebworksError::Other { source: Box::new(e) })?;

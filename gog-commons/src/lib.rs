@@ -14,9 +14,10 @@ pub mod data_structures {
         pub content: String,
         pub post_id: Uuid,
     }
-    #[derive(serde::Deserialize, Debug, Clone)]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
     pub struct PostsFilter {
         pub username: Option<String>,
+        pub user_id: Option<Uuid>,
         pub limit: Option<u64>,
     }
     #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

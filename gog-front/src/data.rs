@@ -52,6 +52,12 @@ pub struct UserProfileQuery {
 pub struct PostQuery {
     pub id: Option<uuid::Uuid>
 }
+#[derive(leptos::Params, PartialEq, Clone)]
+pub struct UserPostsQuery {
+    pub uid: Option<uuid::Uuid>,
+    pub login: Option<String>,
+    pub limit: Option<u64>,
+}
 //#[derive(Clone, serde::Deserialize, Serialize, Debug)]
 //pub struct CommentData {
 //    pub comment_id: String,

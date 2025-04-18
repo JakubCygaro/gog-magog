@@ -14,8 +14,11 @@ pub(crate) mod comments;
 pub(crate) mod util;
 pub(crate) mod loader;
 pub(crate) mod data;
+use std::str::FromStr;
+
 use data::UserData;
 use errors::{LoginError, PfpUploadError, RegisterError, UpdateUserError};
+use gog_commons::data_structures::PostsFilter;
 use leptos::leptos_dom::logging::{self, console_error};
 use leptos::{component, create_resource, create_action, create_node_ref, event_target, event_target_value, expect_context, prelude::*, provide_context, spawn_local, with, CollectView, IntoView, NodeRef};
 use leptos::view;
@@ -42,6 +45,17 @@ fn App() -> impl IntoView {
     //     ev.prevent_default();
     // };
     provide_context(create_rw_signal::<Option<UserData>>(None));
+    let logged_user_posts = move||{
+        //let user_data = expect_context::<RwSignal<Option<UserData>>>().get().expect("expected logged in user data").login;
+        //let filter = PostsFilter{
+        //    username: Some(user_data),
+        //    limit: None,
+        //    user_id: None
+        //};
+        view!{
+            <UserPosts />
+        }
+    };
     view!{
         <Router>
             <nav class="nav">
@@ -53,9 +67,9 @@ fn App() -> impl IntoView {
                             <Route path="/login" view=LoginForm/>
                             <Route path="/user" view=UserScreen/>
                             <Route path="/user/edit" view=EditUser/>
-                            <Route path="/user/posts" view=UserPosts/>
+                            <Route path="/user/posts" view=logged_user_posts/>
                             <Route path="/users" view=DisplayOtherUser/>
-                            <Route path="/test" view=UserPosts/>
+                            //<Route path="/test" view=UserPosts/>
                             <Route path="/register" view=RegisterForm></Route>
                             <Route path="/posts" view=PostsFrontPage />
                             <Route path="/post" view=posts::Post />
@@ -576,7 +590,8 @@ fn DisplayUser(user_data: Option<data::UserData>) -> impl IntoView {
         <button
             on:click=move|_| {
                 let nav = use_navigate();
-                nav("user/posts", NavigateOptions {
+                let url = format!("user/posts?login={}", data.get().unwrap().login);
+                nav(&url, NavigateOptions {
                     resolve: true,
                     ..Default::default()
                 });
@@ -635,6 +650,25 @@ fn DisplayOtherUser() -> impl IntoView {
                     </td>
                 </tr>
             </table>
+            <button
+                on:click=move|_| {
+                    let nav = use_navigate();
+                    let username = get_un.get().name;
+                    let uid = get_un.get().id;
+                    let mut url = "user/posts?".to_owned();
+                    if let Some(username) = username {
+                        url.push_str(&format!("login={}", username));
+                    }
+                    if let Some(uid) = uid {
+                        url.push_str(&format!("&uid={}", uid));
+                    }
+                    nav(&url, NavigateOptions {
+                        resolve: true,
+                        ..Default::default()
+                    });
+                }>
+                "User posts"
+            </button>
             </div>
         }
     };

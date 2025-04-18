@@ -6,7 +6,6 @@ use std::str::FromStr;
 use leptos::{create_action,  Callable};
 use leptos::{component, IntoView, Suspense, view, prelude::*, expect_context, create_resource, Show, NodeRef, create_node_ref};
 use crate::errors::{CreatePostError, WebworksError};
-use crate::webworks::PostsFilter;
 use super::data::*;
 use super::webworks;
 
@@ -68,13 +67,20 @@ async fn front_posts_loader(_: (), v: i32) -> Result<Vec<PostData>, WebworksErro
 
 #[component]
 pub fn UserPosts() -> impl IntoView {
-    let user_data_state = expect_context::<RwSignal<Option<UserData>>>();
-    let Some(user_data) = user_data_state.get() else {
-        return view! {}.into_view()
-    };
+    let query = use_query::<UserPostsQuery>();
+
+    if query.with_untracked(|q| q.is_err()){
+        return view!{<super::NotFound/>};
+    }
+    let filter_query = query.get().unwrap();
+    //let user_data_state = expect_context::<RwSignal<Option<UserData>>>();
+    //let Some(user_data) = user_data_state.get() else {
+    //    return view! {}.into_view()
+    //};
     let filter = PostsFilter {
-        username: Some(user_data.login),
-        limit: None
+        user_id: filter_query.uid,
+        username: filter_query.login,
+        limit: filter_query.limit
     };
     let dis = move |post: PostData| {
         view! {
@@ -82,7 +88,7 @@ pub fn UserPosts() -> impl IntoView {
         }
     };
     view!{
-        <h1 style="text-align:center;"> "Your posts:"</h1><br/>
+        <h1 style="text-align:center;"> "Posts by " {move||query.get().unwrap().login}:</h1><br/>
         <InfiniteLoad
             display=dis
             loader=user_posts_loader
@@ -98,6 +104,7 @@ async fn user_posts_loader(filter: PostsFilter, v: i32) -> Result<Vec<PostData>,
 #[component]
 fn PostForm(user_data: Option<UserData>, #[prop(into)] on_posted: leptos::Callback<()>) -> impl IntoView {
     let (get, set) = create_signal(user_data);
+    let post_content: NodeRef<leptos::html::Textarea> = create_node_ref();
 
     let post_action = create_action(|post_data: &PostCreationData|{
         let post_data = post_data.to_owned();
@@ -114,6 +121,7 @@ fn PostForm(user_data: Option<UserData>, #[prop(into)] on_posted: leptos::Callba
                 Some(res) => match res {
                     Ok(_) => {
                         on_posted.call(());
+                        post_content.get().unwrap().set_value("");
                         view!{
                             <p style="text-align:center;">"Uploaded!"</p>
                         }.into_view()
@@ -136,12 +144,11 @@ fn PostForm(user_data: Option<UserData>, #[prop(into)] on_posted: leptos::Callba
             }
         })
     };
-
-    let post_content: NodeRef<leptos::html::Textarea> = create_node_ref();
+    let (first_edit_get, first_edit_set) = create_signal(true);
     let on_click_post = move|_| {
         let content = post_content.get().unwrap().value();
         let pcdata = PostCreationData {
-            content: content
+            content
         };
         post_action.dispatch(pcdata);
     };
@@ -177,6 +184,12 @@ fn PostForm(user_data: Option<UserData>, #[prop(into)] on_posted: leptos::Callba
                             prop:value="Post text"
                             maxlength="300"
                             node_ref=post_content
+                            on:click=move|_ev|{
+                                if first_edit_get.get() {
+                                    post_content.get().unwrap().set_value("");
+                                    first_edit_set.set(false);
+                                }
+                            }
                             />
             </div>
             {move||{post_action_pending.get().then(||view!{<p style="text-align:center;">"Uploading your post"</p>})}}

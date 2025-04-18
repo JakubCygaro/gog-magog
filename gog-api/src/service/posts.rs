@@ -19,7 +19,7 @@ use crate::{
 };
 
 use super::{helpers, DbConnection, ServiceResult};
-use gog_commons::data_structures::{PostCreationData, PostsFilter};
+use gog_commons::data_structures::{PostCreationData};
 use std::sync::Mutex;
 pub fn configure_service(cfg: &mut web::ServiceConfig) {
     let posts_scope = web::scope("/posts")
@@ -59,12 +59,14 @@ async fn posts_create(
 }
 
 #[actix_web::post("filter")]
-async fn posts_filter(db: Data<DbConnection>, filter: Json<PostsFilter>) -> super::ServiceResult {
+async fn posts_filter(db: Data<DbConnection>, filter: Json<gog_commons::data_structures::PostsFilter>) -> super::ServiceResult {
     let filter = filter.into_inner();
     let mut posts = super::entity::posts::Entity::find().find_also_related(login_data::Entity);
 
     if let Some(un) = filter.username {
         posts = posts.filter(login_data::Column::Login.eq(un));
+    } else if let Some(uid) = filter.user_id {
+        posts = posts.filter(login_data::Column::UserId.eq(uid));
     }
     posts = posts.limit(filter.limit.unwrap_or(20));
     let posts = posts

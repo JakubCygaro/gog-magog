@@ -89,7 +89,7 @@ pub async fn comments_get(
         (Some(pid), None) => {
             let com = comments::Entity::find()
                 .filter(comments::Column::PostId.eq(pid))
-                .order_by_asc(comments::Column::Posted)
+                .order_by_desc(comments::Column::Posted)
                 .find_also_related(login_data::Entity)
                 .limit(limit)
                 .all(&db.db_connection)

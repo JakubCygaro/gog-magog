@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 
 use chrono::TimeZone;
 use gog_commons::data_structures::CommentCreationData;
-use leptos::{component, create_action, Suspense, create_node_ref, create_local_resource, create_signal, view, Callable, ErrorBoundary, IntoView, NodeRef, SignalGet, SignalWith};
+use leptos::{component, create_action, create_local_resource, create_node_ref, create_signal, view, Callable, ErrorBoundary, IntoView, NodeRef, SignalGet, SignalSet, SignalWith, Suspense};
 use crate::webworks;
 use crate::data::CommentData;
 
@@ -75,6 +75,7 @@ pub fn CommentForm(post_id: uuid::Uuid, #[prop(into)] on_posted: leptos::Callbac
             }
         })
     };
+    let (first_edit_get, first_edit_set) = create_signal(true);
     view!{
         <div class="flex-column comment-section">
             //<div class="flex-column">
@@ -102,6 +103,12 @@ pub fn CommentForm(post_id: uuid::Uuid, #[prop(into)] on_posted: leptos::Callbac
                         prop:value="Comment text"
                         maxlength="300"
                         node_ref=comment_content
+                        on:click=move|_ev|{
+                            if first_edit_get.get() {
+                                comment_content.get().unwrap().set_value("");
+                                first_edit_set.set(false);
+                            }
+                        }
                         />
             <button
                 style="padding: 5px; "
