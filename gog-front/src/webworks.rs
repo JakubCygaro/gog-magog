@@ -198,7 +198,7 @@ pub async fn load_posts(amount: i32, filter: Option<&PostsFilter>) -> Result<Vec
         let resp = resp.send().await?;
         text = resp.text().await?;
     }
-    leptos::logging::debug_warn!("{}", text);
+    //leptos::logging::debug_warn!("{}", text);
     let json = serde_json::from_str::<Vec<PostData>>(&text).unwrap();
     Ok(json)
 }

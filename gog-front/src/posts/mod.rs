@@ -37,11 +37,7 @@ pub fn PostsFrontPage() -> impl IntoView {
                             user_data=user_data
                             on_posted=move|_|{
                                 set_refresh.set(Some(()));
-                                //set_toload.set(get_posts.with_untracked(|v|{
-                                //    Some((v.len() + 1) as i32)
-                                //}));
-                                //load_posts.dispatch(get_toload.get_untracked());
-                                //load_posts.dispatch(Some(get_toload.get_untracked().unwrap_or(LOAD_INITIAL) + 1));
+                                leptos::logging::debug_warn!("calling refresh");
                             }
                         />
                     })
@@ -57,6 +53,7 @@ pub fn PostsFrontPage() -> impl IntoView {
                 display=dis
                 loader=front_posts_loader
                 extra_data={}
+                refresh=get_refresh
                 />
         </div>
     }
@@ -293,6 +290,7 @@ pub fn Post() -> impl IntoView {
                         comment_button=false
                     />
                     <crate::comments::CommentForm post_id=pid on_posted=move|_|{
+                        leptos::logging::debug_warn!("calling refresh");
                         refresh_set.set(Some(()));
                     }/>
                     <InfiniteLoad

@@ -111,21 +111,8 @@ where
                     Err(_) => Some(view!{<p style="text-align:center;">"Failed to load data"</p>}.into_view())
                 }
             }
-        }) 
+        })
     };
-    if let Some(refresh) = refresh {
-        let _refresh_fn = Effect::new(move |_| {
-            if refresh.get().is_none() {
-                return;
-            };
-            log!("refresh requested!");
-            set_toload.set(get_posts.with_untracked(|v|{
-                Some((v.len()) as i32)
-            }));
-            //load_items.dispatch(get_toload.get_untracked());
-            load_items.dispatch(Some(get_toload.get_untracked().unwrap_or(load_initial) + 1));
-        });
-    }
     view!{
         <div
             on:load=move|_|{
@@ -134,13 +121,6 @@ where
             }>
 
             {display_posts}
-            //{
-            //    move|| {
-            //        get_posts.get().into_iter().map(|p|{
-            //            display(p)
-            //        }).collect::<Vec<_>>()
-            //    }
-            //}
             <For
                 each=move || get_posts.get()
                 key=|state| state.key()
@@ -151,6 +131,26 @@ where
                 }
                 />
             {move||{load_items_pending.get().then(||view!{<p>"loading..."</p>})}}
+            {
+                if let Some(refresh) = refresh {
+                    view!{
+                        {
+                            let _refresh_fn = move || {
+                                if refresh.get().is_none() {
+                                    return;
+                                };
+                                set_toload.set(get_posts.with_untracked(|v|{
+                                    Some((v.len()) as i32)
+                                }));
+                                load_items.dispatch(Some(get_toload.get_untracked().unwrap_or(load_initial) + 1));
+                            };
+                            Some(_refresh_fn)
+                        }
+                    }
+                } else {
+                    None
+                }
+            }
         </div>
     }
 }
