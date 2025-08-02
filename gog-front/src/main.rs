@@ -41,17 +41,8 @@ fn NotFound()  -> impl IntoView {
 
 #[component]
 fn App() -> impl IntoView {
-    // let on_submit = move |ev: leptos::ev::SubmitEvent| {
-    //     ev.prevent_default();
-    // };
     provide_context(create_rw_signal::<Option<UserData>>(None));
     let logged_user_posts = move||{
-        //let user_data = expect_context::<RwSignal<Option<UserData>>>().get().expect("expected logged in user data").login;
-        //let filter = PostsFilter{
-        //    username: Some(user_data),
-        //    limit: None,
-        //    user_id: None
-        //};
         view!{
             <UserPosts />
         }
@@ -69,7 +60,6 @@ fn App() -> impl IntoView {
                             <Route path="/user/edit" view=EditUser/>
                             <Route path="/user/posts" view=logged_user_posts/>
                             <Route path="/users" view=DisplayOtherUser/>
-                            //<Route path="/test" view=UserPosts/>
                             <Route path="/register" view=RegisterForm></Route>
                             <Route path="/posts" view=PostsFrontPage />
                             <Route path="/post" view=posts::Post />
@@ -444,7 +434,6 @@ fn EditUser() -> impl IntoView {
                 None => view!{}.into_view(),
                 Some(r) => match r {
                     Ok(_) => {
-                        //leptos::document().location().unwrap().reload().unwrap();
                         view!{<p>"Uploaded!"</p>}.into_view()
                     },
                     Err(e) => match e {

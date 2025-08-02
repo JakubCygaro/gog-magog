@@ -52,19 +52,21 @@ where
         let to_load = to_load.to_owned();
         let loader = loader.clone();
         let extra_data = extra_data.clone();
+        debug_warn!("load_items called with to_load: {:?}", to_load);
         async move {
             if let Some(v) = to_load {
                 debug_warn!("to_load: {}", v);
                 let s = loader(extra_data.clone(), v).await;
-                if let Ok(posts) = s {
-                    if posts.is_empty() && get_posts.with_untracked(|p| p.is_empty()) {
+                if let Ok(loaded_data) = s {
+                    if loaded_data.is_empty() && get_posts.with_untracked(|p| p.is_empty()) {
+                        debug_warn!("loaded_data was empty");
                         return Ok(())
-                    } else if posts.len() > get_posts.with_untracked(|p| p.len()) {
-                        leptos::logging::debug_warn!("new posts loaded");
-                        set_posts.set(posts);
+                    } else if loaded_data.len() > get_posts.with_untracked(|p| p.len()) {
+                        debug_warn!("new posts loaded");
+                        set_posts.set(loaded_data);
                         set_toload.set(None);
                     } else {
-                        leptos::logging::debug_warn!("cooldown set");
+                        debug_warn!("cooldown set");
                         load_items_cooldown.dispatch(());
                         set_toload.set(Some(get_toload.with_untracked(|v| v.unwrap_or(load_more) - load_more)));
                     }
@@ -75,13 +77,14 @@ where
                     return Err(err);
                 }
             }
+            debug_warn!("nothing to load");
             Ok(())
         }
     });
 
     let window = leptos::window();
 
-    let onscroll = js_closure!(move|e: web_sys::Event| {
+    let onscroll = js_closure!(move|_e: web_sys::Event| {
         let window = leptos::window();
         let body = leptos::document().body().unwrap();
         let scrolled_to = window.scroll_y().unwrap() + window.inner_height().unwrap().as_f64().unwrap();
@@ -116,7 +119,7 @@ where
     view!{
         <div
             on:load=move|_|{
-                leptos::logging::log!("div_on_load");
+                //leptos::logging::log!("div_on_load");
                 load_items.dispatch(Some(10));
             }>
 
@@ -142,7 +145,9 @@ where
                                 set_toload.set(get_posts.with_untracked(|v|{
                                     Some((v.len()) as i32)
                                 }));
-                                load_items.dispatch(Some(get_toload.get_untracked().unwrap_or(load_initial) + 1));
+                                let toload = get_toload.get_untracked().unwrap_or(load_initial) + 1;
+                                debug_warn!("refresh function dispatch with toload: {}", toload);
+                                load_items.dispatch(Some(toload));
                             };
                             Some(_refresh_fn)
                         }
