@@ -1,9 +1,3 @@
-[env]
-ADRESS = "127.0.0.1"
-PORT = 8081
-DATABASE_URL = "sqlite://data/users.db"
-DATABASE_NAME = "users_db"
-
 [tasks.format]
 command = "cargo"
 args = ["fmt"]
@@ -15,35 +9,26 @@ dependencies = ["format"]
 
 [tasks.run]
 command = "cargo"
-args = ["run", "--", 
-    "--adress=${ADRESS}",
-    "--port=${PORT}",
-    "--db=${DATABASE_URL}",
-    "--db-name=${DATABASE_NAME}"
-    ]
+args = ["run"]
 dependencies = ["format"]
 
 [tasks.fresh]
 command = "cargo"
-args = ["run", "--", 
-    "--adress=${ADRESS}",
-    "--port=${PORT}",
-    "--db=${DATABASE_URL}",
-    "--db-name=${DATABASE_NAME}",
+args = ["run",
     "--fresh=true"
     ]
 dependencies = ["format"]
 
 [tasks.watch]
 command = "cargo"
-args = ["watch", 
+args = ["watch",
     "-w",
     "./src",
     "-w",
     "./data",
     "-w",
     "./Cargo.toml",
-    "-x", 
-    "run -- --adress=${ADRESS} --port=${PORT} --db=${DATABASE_URL} --db-name=${DATABASE_NAME}"
+    "-x",
+    "run"
     ]
 dependencies = ["format"]

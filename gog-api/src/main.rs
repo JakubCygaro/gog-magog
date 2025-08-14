@@ -1,6 +1,5 @@
 #![allow(clippy::all)]
 
-mod args;
 mod cache;
 mod entity;
 mod errors;
@@ -8,8 +7,6 @@ mod migrator;
 mod service;
 mod session;
 use actix_cors::Cors;
-use args::{self as run_args, RunArgs};
-use clap::Parser;
 use std::sync::Mutex;
 
 use actix_session::{storage::CookieSessionStore, SessionMiddleware};
@@ -77,23 +74,74 @@ async fn setup_database(
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
 
-    let args = run_args::RunArgs::parse();
+    dotenvy::dotenv().map_err(|_e| {
+        log::warn!(".env file not present");
+    }).unwrap_or_default();
 
+    let args = clap::Command::new("gog-magog-api")
+        // .version(clap::crate_version!())
+        .arg(
+            clap::Arg::new("address")
+                .env(gog_commons::vars::BACKEND_ADDRESS_ENV)
+                .short('a')
+                .long("address"),
+        )
+        .arg(
+            clap::Arg::new("port")
+                .env(gog_commons::vars::BACKEND_PORT_ENV)
+                .short('p')
+                .long("port"),
+        )
+        .arg(
+            clap::Arg::new("db")
+                .env(gog_commons::vars::BACKEND_DATABASE_URL_ENV)
+                .long("database-url"),
+        )
+        .arg(
+            clap::Arg::new("db_name")
+                .env(gog_commons::vars::BACKEND_DATABASE_NAME_ENV)
+                .long("database-name"),
+        )
+        .arg(
+            clap::Arg::new("fresh")
+                .long("fresh")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .get_matches();
+    use gog_commons::vars::defaults;
+    let address = args.get_one::<&str>("address").map_or(defaults::BACKEND_ADDRESS, |a| &a);
+    let port = args.get_one::<u16>("port").map_or(defaults::BACKEND_PORT, |p| *p);
+    let db = args.get_one::<String>("db").expect("db expected");
+    let db_name = args.get_one::<String>("db_name").expect("db_name expected");
     log!(
         Level::Info,
         "Running gog-magog server on {}:{}\nwith database url: {} and database name: {}",
-        &args.adress,
-        &args.port,
-        &args.db,
-        &args.db_name
+        address,
+        port,
+        db,
+        db_name
     );
-    create_and_run_server(&args).await?.await?;
+    create_and_run_server(
+        &address,
+        port,
+        &db,
+        &db_name,
+        args.get_flag("fresh")
+    )
+    .await?
+    .await?;
     Ok(())
 }
 
-async fn create_and_run_server(args: &RunArgs) -> std::io::Result<Server> {
+async fn create_and_run_server(
+    address: &str,
+    port: u16,
+    db: &str,
+    db_name: &str,
+    fresh: bool,
+) -> std::io::Result<Server> {
     let secret_key = Key::generate();
-    let db = setup_database(&args.db, &args.db_name, args.fresh)
+    let db = setup_database(db, db_name, fresh)
         .await
         .unwrap_or_else(|e| panic!("database setup error: {}", e));
 
@@ -121,6 +169,6 @@ async fn create_and_run_server(args: &RunArgs) -> std::io::Result<Server> {
             .wrap(Logger::default())
             .wrap(cors)
     })
-    .bind((args.adress.clone(), args.port))?
+    .bind((address, port))?
     .run())
 }

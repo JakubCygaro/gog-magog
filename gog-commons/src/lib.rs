@@ -1,3 +1,20 @@
+pub mod vars {
+    pub const BACKEND_ADDRESS_ENV: &str = "MAGOG_BACKEND_ADDR";
+    pub const BACKEND_PORT_ENV: &str = "MAGOG_BACKEND_PORT";
+    pub const BACKEND_DATABASE_URL_ENV: &str = "MAGOG_BACKEND_DB_URL";
+    pub const BACKEND_DATABASE_NAME_ENV: &str = "MAGOG_BACKEND_DB_NAME";
+
+    pub const FRONTENT_ADDRESS_ENV: &str = "MAGOG_FRONTEND_ADDR";
+    pub const FRONTEND_PORT_ENV: &str = "MAGOG_FRONTEND_PORT";
+
+    pub mod defaults {
+        pub const BACKEND_ADDRESS: &str = "127.0.0.1";
+        pub const BACKEND_PORT: u16 = 8081;
+
+        pub const FRONTEND_ADDRESS: &str = "127.0.0.1";
+        pub const FRONTEND_PORT: u16 = 8082;
+    }
+}
 #[cfg(feature = "backend")]
 pub mod validation;
 
