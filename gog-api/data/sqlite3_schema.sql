@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS "login_data" ( "login" text NOT NULL PRIMARY KEY, "user_id" text NOT NULL UNIQUE, "salt" text NOT NULL, "hash" text NOT NULL );
+CREATE TABLE IF NOT EXISTS "user_pfp" ( "user_id" text(36) NOT NULL PRIMARY KEY, "data" blob, FOREIGN KEY ("user_id") REFERENCES "login_data" ("user_id") ON DELETE CASCADE );
+CREATE TABLE IF NOT EXISTS "posts" ( "post_id" text(36) PRIMARY KEY, "user_id" text(36) NOT NULL, "posted" text NOT NULL, "content" text NOT NULL, FOREIGN KEY ("user_id") REFERENCES "login_data" ("user_id") ON DELETE CASCADE );
+CREATE TABLE IF NOT EXISTS "comments" ( "comment_id" text(36) PRIMARY KEY, "post_id" text(36) NOT NULL, "user_id" text(36) NOT NULL, "posted" text NOT NULL, "content" text NOT NULL, FOREIGN KEY ("user_id") REFERENCES "login_data" ("user_id") ON DELETE CASCADE, FOREIGN KEY ("post_id") REFERENCES "posts" ("post_id") ON DELETE CASCADE );
+CREATE TABLE user_data (user_id text NOT NULL PRIMARY KEY, description text, "created" text, "gender" text DEFAULT 'not given', FOREIGN KEY (user_id) REFERENCES login_data (user_id) ON DELETE CASCADE);

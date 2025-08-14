@@ -74,9 +74,11 @@ async fn setup_database(
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
 
-    dotenvy::dotenv().map_err(|_e| {
-        log::warn!(".env file not present");
-    }).unwrap_or_default();
+    dotenvy::dotenv()
+        .map_err(|_e| {
+            log::warn!(".env file not present");
+        })
+        .unwrap_or_default();
 
     let args = clap::Command::new("gog-magog-api")
         // .version(clap::crate_version!())
@@ -105,12 +107,16 @@ async fn main() -> std::io::Result<()> {
         .arg(
             clap::Arg::new("fresh")
                 .long("fresh")
-                .action(clap::ArgAction::SetTrue)
+                .action(clap::ArgAction::SetTrue),
         )
         .get_matches();
     use gog_commons::vars::defaults;
-    let address = args.get_one::<&str>("address").map_or(defaults::BACKEND_ADDRESS, |a| &a);
-    let port = args.get_one::<u16>("port").map_or(defaults::BACKEND_PORT, |p| *p);
+    let address = args
+        .get_one::<&str>("address")
+        .map_or(defaults::BACKEND_ADDRESS, |a| &a);
+    let port = args
+        .get_one::<u16>("port")
+        .map_or(defaults::BACKEND_PORT, |p| *p);
     let db = args.get_one::<String>("db").expect("db expected");
     let db_name = args.get_one::<String>("db_name").expect("db_name expected");
     log!(
@@ -121,15 +127,9 @@ async fn main() -> std::io::Result<()> {
         db,
         db_name
     );
-    create_and_run_server(
-        &address,
-        port,
-        &db,
-        &db_name,
-        args.get_flag("fresh")
-    )
-    .await?
-    .await?;
+    create_and_run_server(&address, port, &db, &db_name, args.get_flag("fresh"))
+        .await?
+        .await?;
     Ok(())
 }
 
